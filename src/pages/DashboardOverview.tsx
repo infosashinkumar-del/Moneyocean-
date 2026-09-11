@@ -37,6 +37,7 @@ import {
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import { StatCard } from '../components/StatCard';
+import { ReferralCard } from '../components/ReferralCard';
 import { showToast } from '../components/Toast';
 import { getLiveReferralUrl, getUserTransactions } from '../lib/supabase';
 import { Transaction } from '../types';
@@ -93,15 +94,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     setTimeout(() => setCopied(false), 2500);
   };
 
+  const unitPrice = packagePrice;
+
   const handleShareWhatsapp = () => {
     if (!referralUrl) return;
-    const text = `🔥 *MoneyOcean 100% P2P Earning Model* 🔥\n\nDirect ₹${(packagePrice || 5000).toLocaleString('en-IN')} commission on every peer sale directly to your UPI/Bank. 100% transparent 2-Up pass-up matrix.\n\n👉 Join my team here: ${referralUrl}\nSponsor Code: *${user?.referral_code || ''}*`;
+    const text = `🔥 *MoneyOcean 100% P2P Earning Model* 🔥\n\nDirect ₹${unitPrice.toLocaleString('en-IN')} commission on every peer sale directly to your UPI/Bank. 100% transparent 2-Up pass-up matrix.\n\n👉 Join my team here: ${referralUrl}\nSponsor Code: *${user?.referral_code || ''}*`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleShareTelegram = () => {
     if (!referralUrl) return;
-    const text = `🚀 MoneyOcean Autonomous P2P Network — ₹${(packagePrice || 5000).toLocaleString('en-IN')} Direct Payouts. Join now: ${referralUrl}`;
+    const text = `🚀 MoneyOcean Autonomous P2P Network — ₹${unitPrice.toLocaleString('en-IN')} Direct Payouts. Join now: ${referralUrl}`;
     window.open(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -116,7 +119,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   // Qualification Status (3 direct sales required: 1st & 3rd pass-up, 2nd kept => Qualified)
   const isQualified = directCount >= 3;
-  const unitPrice = packagePrice || 5000;
 
   // Direct kept sales: Sale #2, and all sales from #4 onwards (Sale #1 & #3 pass up)
   const directKeptSalesCount = directCount >= 3 ? (directCount - 2) : (directCount === 2 ? 1 : 0);
@@ -177,6 +179,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
       </div>
 
+      {/* Referral Link & Status Activation Card */}
+      <ReferralCard onNavigateCheckout={onNavigateCheckout} />
+
       {/* Dynamic Dedicated Account Activation Hero Card when Inactive */}
       {user && !user.is_active && (
         <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-[#131008] via-[#10141d] to-[#070a10] border border-amber-500/50 shadow-[0_0_40px_rgba(245,158,11,0.12)] relative overflow-hidden flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
@@ -189,7 +194,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
 
             <h3 className="text-xl sm:text-2xl lg:text-3xl font-extrabold font-display text-white tracking-tight">
-              Activate Your Node for <span className="gold-gradient-text">₹{(packagePrice || 5000).toLocaleString('en-IN')} INR</span>
+              Activate Your Node for <span className="gold-gradient-text">₹{unitPrice.toLocaleString('en-IN')} INR</span>
             </h3>
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
@@ -199,7 +204,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#111724] border border-[#23314d] text-emerald-400 text-xs font-semibold">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                100% Direct P2P (₹{(packagePrice || 5000).toLocaleString('en-IN')}/sale)
+                100% Direct P2P (₹{unitPrice.toLocaleString('en-IN')}/sale)
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#111724] border border-[#23314d] text-amber-300 text-xs font-semibold">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
@@ -215,14 +220,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <div className="relative z-10 shrink-0 flex flex-col items-start lg:items-end gap-3 w-full sm:w-auto">
             <div className="text-left lg:text-right">
               <div className="text-xs font-mono uppercase text-slate-400">One-Time Activation Fee</div>
-              <div className="text-3xl sm:text-4xl font-extrabold font-display text-white gold-gradient-text">₹{(packagePrice || 5000).toLocaleString('en-IN')} <span className="text-xs text-slate-400 font-sans font-normal">INR</span></div>
+              <div className="text-3xl sm:text-4xl font-extrabold font-display text-white gold-gradient-text">₹{unitPrice.toLocaleString('en-IN')} <span className="text-xs text-slate-400 font-sans font-normal">INR</span></div>
             </div>
             <button
               onClick={onNavigateCheckout}
               className="w-full sm:w-auto px-6 py-3.5 rounded-2xl gold-btn-gradient text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2.5 shadow-xl shadow-amber-500/25 hover:shadow-amber-500/40 hover:scale-105 transition-all cursor-pointer"
             >
               <Zap className="w-4 h-4 fill-slate-950" />
-              <span>ACTIVATE NOW (₹{(packagePrice || 5000).toLocaleString('en-IN')})</span>
+              <span>ACTIVATE NOW (₹{unitPrice.toLocaleString('en-IN')})</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -353,7 +358,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   <div className="font-mono font-bold text-emerald-400">
                     ₹{directRetainedEarned.toLocaleString('en-IN')}
                   </div>
-                  <div className="text-[10px] font-mono text-slate-400">₹{(packagePrice || 5000).toLocaleString('en-IN')} per sale</div>
+                  <div className="text-[10px] font-mono text-slate-400">₹{unitPrice.toLocaleString('en-IN')} per sale</div>
                 </div>
               </div>
 
@@ -436,7 +441,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         ) : recentTransactions.length === 0 ? (
           <div className="py-8 text-center text-xs text-slate-400 space-y-2">
             <Banknote className="w-8 h-8 mx-auto text-slate-600" />
-            <p>No P2P settlements yet. Share your referral link to earn ₹{(packagePrice || 5000).toLocaleString('en-IN')} direct!</p>
+            <p>No P2P settlements yet. Share your referral link to earn ₹{unitPrice.toLocaleString('en-IN')} direct!</p>
           </div>
         ) : (
           <div className="w-full overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-[#1c2436] scrollbar-track-transparent">

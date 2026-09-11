@@ -95,7 +95,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               />
             )}
 
-            {activeTab === 'referral' && <ReferralToolkit />}
+            {activeTab === 'referral' && <ReferralToolkit onNavigateCheckout={onNavigateCheckout} />}
 
             {activeTab === 'team' && <TeamGenealogy />}
 

@@ -10,8 +10,12 @@ import {
   PlatformConfig
 } from '../types';
 
-export const SUPABASE_URL = 'https://gedbbysyehtdaqgkrmqk.supabase.co';
-export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlZGJieXN5ZWh0ZGFxZ2tybXFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYxODU3NjgsImV4cCI6MjEwMTc2MTc2OH0.-FKQLcaL0lFzVHmEHg4HQc-AsgfYrjXIoAz4cRkFtXc';
+export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+export const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  console.warn('VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY environment variable is not defined.');
+}
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -66,9 +70,11 @@ export function normalizeReferralVariants(code: string): string[] {
 // Helper to fetch live platform configurations (e.g. package_price, reservation_lock_minutes, fallback_zap_key)
 export async function getPlatformConfigs(): Promise<PlatformConfig> {
   const defaultConfig: PlatformConfig = {
-    package_price: 5000,
-    reservation_lock_minutes: 15,
-    fallback_zap_key: 'Zapf51bf8673c78299aef19410cc987e265'
+    package_price: 0,
+    reservation_lock_minutes: 8,
+    fallback_zap_key: '',
+    referral_cutoff_date: '',
+    platform_launch_date: ''
   };
 
   try {
@@ -89,7 +95,7 @@ export async function getPlatformConfigs(): Promise<PlatformConfig> {
           ...mapped,
           package_price: Number(mapped.package_price !== undefined ? mapped.package_price : defaultConfig.package_price),
           reservation_lock_minutes: Number(mapped.reservation_lock_minutes || defaultConfig.reservation_lock_minutes),
-          fallback_zap_key: mapped.fallback_zap_key || defaultConfig.fallback_zap_key
+          fallback_zap_key: mapped.fallback_zap_key ? String(mapped.fallback_zap_key).trim() : ''
         };
       } else {
         const row = data[0];
@@ -98,7 +104,7 @@ export async function getPlatformConfigs(): Promise<PlatformConfig> {
           ...row,
           package_price: Number(row.package_price !== undefined ? row.package_price : (row.amount !== undefined ? row.amount : defaultConfig.package_price)),
           reservation_lock_minutes: Number(row.reservation_lock_minutes || defaultConfig.reservation_lock_minutes),
-          fallback_zap_key: row.fallback_zap_key || defaultConfig.fallback_zap_key
+          fallback_zap_key: row.fallback_zap_key ? String(row.fallback_zap_key).trim() : ''
         };
       }
     }
@@ -107,6 +113,23 @@ export async function getPlatformConfigs(): Promise<PlatformConfig> {
   }
 
   return defaultConfig;
+}
+
+// Update platform config dynamically in database
+export async function updatePlatformConfig(key: string, value: any): Promise<{ success: boolean; message?: string }> {
+  try {
+    const { error } = await supabase
+      .from('platform_configs')
+      .upsert({ key, value: typeof value === 'object' ? JSON.stringify(value) : value }, { onConflict: 'key' });
+
+    if (error) {
+      console.error('updatePlatformConfig error:', error);
+      return { success: false, message: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Error updating config' };
+  }
 }
 
 // 1. Referral validation directly from Supabase (Strict - No local mock fallback)
@@ -206,11 +229,36 @@ export async function generateP2PCheckout(
 
     const config = await getPlatformConfigs();
     const pkgAmount = Number(data.amount !== undefined ? data.amount : config.package_price);
-    const activeZapKey = data.zap_key || config.fallback_zap_key || '';
     const benName = data.beneficiary_name || 'Admin Beneficiary';
     const benReason = data.passup_reason || (data.is_passup ? 'Pass-up to Upline' : 'Direct Sale');
     const benCode = data.beneficiary_referral_code || '';
     const benId = data.beneficiary_id || '';
+
+    // Dynamic resolution of ZapKey strictly from database
+    let activeZapKey = (data.zap_key && String(data.zap_key).trim().length > 5) ? String(data.zap_key).trim() : '';
+
+    if (!activeZapKey && benId) {
+      try {
+        const { data: mKeys } = await supabase
+          .from('user_merchant_keys')
+          .select('zap_key')
+          .eq('user_id', benId)
+          .eq('is_active', true)
+          .order('priority_order', { ascending: true })
+          .limit(1);
+        if (mKeys && mKeys.length > 0 && mKeys[0].zap_key && String(mKeys[0].zap_key).trim().length > 5) {
+          activeZapKey = String(mKeys[0].zap_key).trim();
+        }
+      } catch (mErr) {
+        console.warn('Could not fetch beneficiary merchant key:', mErr);
+      }
+    }
+
+    if (!activeZapKey) {
+      activeZapKey = (config.fallback_zap_key && String(config.fallback_zap_key).trim().length > 5)
+        ? String(config.fallback_zap_key).trim()
+        : '';
+    }
 
     const baseCheckout: CheckoutResponse = {
       success: true,
@@ -365,14 +413,12 @@ export async function checkZapUPIUtr(payId: string, utr: string): Promise<string
   }
 }
 
-// 3. Settle sale in backend (Strict Server Settlement via RPC / API - No client manipulation)
-export async function settleP2PSale(
+// 3. Client Payment Verification (Strictly verifies through backend ledger - no client RPC manipulation)
+export async function verifyPaymentStatus(
   p_order_id: string, 
-  p_status: 'SUCCESS' | 'FAILED' | 'EXPIRED', 
   p_utr?: string | null
 ): Promise<{ success: boolean; status?: string; message?: string; error?: string }> {
   try {
-    // 1. Invoke server-side verified endpoint
     const res = await fetch('/api/verify-payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -386,37 +432,37 @@ export async function settleP2PSale(
     if (data && data.success) {
       return { 
         success: true, 
-        status: p_status, 
-        message: 'Settlement confirmed by backend ledger.' 
-      };
-    } else {
-      // Direct RPC fallback if server endpoint responded with error
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('settle_p2p_sale', {
-        p_order_id,
-        p_status,
-        p_utr: p_utr || null,
-        p_webhook_signature: 'CLIENT_VERIFY'
-      });
-
-      if (!rpcErr && rpcData) {
-        return {
-          success: true,
-          status: p_status,
-          message: 'Settlement confirmed by database RPC.'
-        };
-      }
-
-      return {
-        success: false,
-        error: data?.message || rpcErr?.message || 'Settlement verification failed.'
+        status: 'SUCCESS', 
+        message: 'Settlement confirmed by verified backend ledger.' 
       };
     }
-  } catch (err: any) {
-    console.error('settleP2PSale error:', err);
     return {
       success: false,
-      error: err.message || 'Network error during settlement verification.'
+      error: data?.message || 'Payment verification in progress.'
     };
+  } catch (err: any) {
+    console.error('verifyPaymentStatus error:', err);
+    return {
+      success: false,
+      error: err.message || 'Network error during payment verification.'
+    };
+  }
+}
+
+// 3b. Admin Manual Settlement (Secured via backend server endpoint only, never client direct RPC)
+export async function simulateAdminSettlement(
+  order_id: string,
+  utr?: string
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await fetch('/api/admin/simulate-settle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id, utr })
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { success: false, message: err.message };
   }
 }
 
@@ -590,6 +636,9 @@ export async function saveUserMerchantKey(
 
       if (updErr) throw updErr;
     } else {
+      const config = await getPlatformConfigs();
+      const defaultLimit = Number(config.monthly_merchant_limit || 0);
+
       const { error: insErr } = await supabase
         .from('user_merchant_keys')
         .insert({
@@ -598,7 +647,7 @@ export async function saveUserMerchantKey(
           paytm_merchant_name: merchantName || null,
           priority_order: 1,
           is_active: true,
-          monthly_limit: 75000.00,
+          monthly_limit: defaultLimit,
           monthly_received_amount: 0.00
         });
 

@@ -24,7 +24,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig | null>(null);
-  const [packagePrice, setPackagePrice] = useState<number>(5000);
+  const [packagePrice, setPackagePrice] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
 
   const fetchPlatformConfig = async () => {
@@ -185,15 +185,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     showToast('info', 'Signed Out', 'You have been signed out successfully.');
   };
 
-  // Check if Master Admin: only specific master admin emails, referral codes, or explicit admin roles
+  // Dynamic role-based Master Admin check (Zero hardcoded credentials)
   const isAdmin = Boolean(
     user && (
-      user.email === 'infosashinkumar@gmail.com' || 
-      user.email === 'admin@moneyocean.com' || 
-      user.referral_code === 'ADMIN100' ||
-      user.referral_code === 'MO_GENESIS' ||
       user.role === 'admin' ||
-      user.is_admin === true
+      user.is_admin === true ||
+      user.sponsor_id === null // Root Genesis node
     )
   );
 

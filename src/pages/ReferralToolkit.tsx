@@ -12,13 +12,18 @@ import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../components/Toast';
 import { getLiveReferralUrl } from '../lib/supabase';
+import { ReferralCard } from '../components/ReferralCard';
 
-export const ReferralToolkit: React.FC = () => {
+interface ReferralToolkitProps {
+  onNavigateCheckout?: () => void;
+}
+
+export const ReferralToolkit: React.FC<ReferralToolkitProps> = ({ onNavigateCheckout }) => {
   const { user, packagePrice } = useAuth();
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCopyIndex, setCopiedCopyIndex] = useState<number | null>(null);
   
-  const unitPrice = packagePrice || 5000;
+  const unitPrice = packagePrice;
   const referralCode = user?.referral_code || '';
   const cleanReferralUrl = getLiveReferralUrl(referralCode);
 
@@ -81,6 +86,9 @@ export const ReferralToolkit: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Referral Status & Link Activation Card */}
+      <ReferralCard onNavigateCheckout={onNavigateCheckout} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 p-6 sm:p-8 rounded-3xl bg-[#0c1017]/90 backdrop-blur-xl border border-[#1c2436] shadow-xl space-y-6">

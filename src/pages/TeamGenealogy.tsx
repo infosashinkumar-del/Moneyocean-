@@ -30,7 +30,7 @@ import { SmartMatrixSimulator } from '../components/SmartMatrixSimulator';
 
 export const TeamGenealogy: React.FC = () => {
   const { user, packagePrice } = useAuth();
-  const unitPrice = packagePrice || 5000;
+  const unitPrice = packagePrice;
   const [team, setTeam] = useState<any[]>([]);
   const [settledTransactions, setSettledTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

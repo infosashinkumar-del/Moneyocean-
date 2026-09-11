@@ -66,7 +66,7 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
   liveReferralUrl
 }) => {
   const { packagePrice } = useAuth();
-  const unitPrice = packagePrice || 5000;
+  const unitPrice = packagePrice;
 
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -388,7 +388,7 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
           <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-300">
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-              <span>Direct Keep (₹5k)</span>
+              <span>Direct Keep ({unitPrice > 0 ? `₹${unitPrice.toLocaleString('en-IN')}` : '100%'})</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />

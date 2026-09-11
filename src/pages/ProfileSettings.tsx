@@ -24,8 +24,8 @@ interface ProfileSettingsProps {
 export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ 
   onNavigate 
 }) => {
-  const { user, authUser, refreshUserData, isAdmin, packagePrice } = useAuth();
-  const unitPrice = packagePrice || 5000;
+  const { user, authUser, refreshUserData, isAdmin, packagePrice, platformConfig } = useAuth();
+  const unitPrice = packagePrice;
 
   // Profile Form
   const [fullName, setFullName] = useState(user?.full_name || '');
@@ -144,9 +144,9 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   };
 
   const activeKey = merchantKeys[0];
-  const monthlyLimit = activeKey?.monthly_limit || 75000;
+  const monthlyLimit = Number(activeKey?.monthly_limit !== undefined ? activeKey.monthly_limit : (platformConfig?.monthly_merchant_limit || 0));
   const receivedAmount = activeKey?.monthly_received_amount || 0;
-  const usagePercent = Math.min(100, Math.round((Number(receivedAmount) / Number(monthlyLimit)) * 100));
+  const usagePercent = monthlyLimit > 0 ? Math.min(100, Math.round((Number(receivedAmount) / Number(monthlyLimit)) * 100)) : 0;
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto p-4 sm:p-8">

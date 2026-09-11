@@ -152,7 +152,7 @@ export const TransactionHistory: React.FC = () => {
                       {/* Amount */}
                       <td className="py-4 px-4">
                         <span className="text-sm font-bold font-display text-white">
-                          ₹{Number(tx.amount || packagePrice || 5000).toLocaleString('en-IN')}
+                          ₹{Number(tx.amount || packagePrice || 0).toLocaleString('en-IN')}
                         </span>
                       </td>
 

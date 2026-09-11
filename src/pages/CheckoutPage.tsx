@@ -32,13 +32,14 @@ interface CheckoutPageProps {
 
 export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard }) => {
   const { user, authUser, refreshUserData, packagePrice, platformConfig } = useAuth();
+  const lockMinutes = Number(platformConfig?.reservation_lock_minutes || 8);
   const [checkoutStep, setCheckoutStep] = useState<'invoice' | 'payment'>('invoice');
   const [loading, setLoading] = useState(true);
   const [slotLockedError, setSlotLockedError] = useState<string | null>(null);
 
   const [orderId, setOrderId] = useState<string>('');
   const [payId, setPayId] = useState<string>('');
-  const [amount, setAmount] = useState<number>(packagePrice || 5000);
+  const [amount, setAmount] = useState<number>(packagePrice || 0);
   const [dynamicZapKey, setDynamicZapKey] = useState<string>(platformConfig?.fallback_zap_key || '');
   const [paymentImageUrl, setPaymentImageUrl] = useState<string>('');
   const [upiButton, setUpiButton] = useState<string>('');
@@ -65,7 +66,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     sponsor_code: ''
   });
 
-  const [remainingSeconds, setRemainingSeconds] = useState<number>(8 * 60);
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(lockMinutes * 60);
   const [statusText, setStatusText] = useState<string>(`Waiting for payment...`);
   const [statusState, setStatusState] = useState<'' | 'success' | 'failed'>('');
   const [utrInput, setUtrInput] = useState<string>('');
@@ -99,7 +100,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     setSlotLockedError(null);
     finalHandledRef.current = false;
     pollActiveRef.current = true;
-    setRemainingSeconds(8 * 60);
+    setRemainingSeconds(lockMinutes * 60);
     setStatusText(`Waiting for payment...`);
     setStatusState('');
     setDialog({ open: false, type: 'SUCCESS', title: '', message: '' });
@@ -127,14 +128,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
 
       const res: CheckoutResponse = await generateP2PCheckout(sponsorCode, authUser.id);
       if (res.error_code === 'SLOT_IN_PROGRESS') {
-        setSlotLockedError(res.message || 'Payment slot is currently locked by another buyer. Please retry in 8 minutes.');
+        setSlotLockedError(res.message || `Payment slot is currently locked by another buyer. Please retry in ${lockMinutes} minutes.`);
         setLoading(false);
         return;
       }
 
       if (res.success && res.order_id) {
         setOrderId(res.order_id);
-        const orderAmt = Number(res.payment?.amount_inr !== undefined ? res.payment.amount_inr : (res.amount !== undefined ? res.amount : (packagePrice || 5000)));
+        const orderAmt = Number(res.payment?.amount_inr !== undefined ? res.payment.amount_inr : (res.amount !== undefined ? res.amount : packagePrice));
         setAmount(orderAmt);
         const activeZap = res.zap_key || res.payment?.zap_key || res.beneficiary_zap_key || platformConfig?.fallback_zap_key || '';
         setDynamicZapKey(activeZap);
@@ -241,7 +242,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
         open: true,
         type: 'TIMEOUT',
         title: 'Payment Timeout',
-        message: 'The 8-minute reservation session has expired. Please regenerate a new order.'
+        message: `The ${lockMinutes}-minute reservation session has expired. Please regenerate a new order.`
       });
     }
   };

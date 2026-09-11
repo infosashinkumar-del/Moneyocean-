@@ -26,7 +26,7 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
   const { packagePrice, platformConfig } = useAuth();
-  const unitPrice = packagePrice || 5000;
+  const unitPrice = packagePrice;
   const lockMins = platformConfig?.reservation_lock_minutes || 8;
 
   const [openFaq, setOpenFaq] = useState<number | null>(0);

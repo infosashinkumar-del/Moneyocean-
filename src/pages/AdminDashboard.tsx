@@ -11,7 +11,7 @@ import {
   Zap,
   Play
 } from 'lucide-react';
-import { supabase, settleP2PSale } from '../lib/supabase';
+import { supabase, simulateAdminSettlement, getPlatformConfigs, updatePlatformConfig } from '../lib/supabase';
 import { StatCard } from '../components/StatCard';
 import { showToast } from '../components/Toast';
 
@@ -26,6 +26,13 @@ export const AdminDashboard: React.FC = () => {
   const [merchantKeysList, setMerchantKeysList] = useState<any[]>([]);
   const [, setGlobalUsers] = useState<any[]>([]);
 
+  // Platform Configs (100% Dynamic - Zero Hardcoding)
+  const [fallbackZapKey, setFallbackZapKey] = useState('');
+  const [packagePrice, setPackagePrice] = useState<number>(0);
+  const [reservationLockMinutes, setReservationLockMinutes] = useState<number>(8);
+  const [platformLaunchDate, setPlatformLaunchDate] = useState<string>('');
+  const [savingConfig, setSavingConfig] = useState(false);
+
   // Simulator / manual action form
   const [simOrderId, setSimOrderId] = useState('');
   const [simUtr, setSimUtr] = useState('');
@@ -34,6 +41,17 @@ export const AdminDashboard: React.FC = () => {
   const fetchAdminData = async () => {
     setLoading(true);
     try {
+      // 0. Fetch Live Platform Configs
+      try {
+        const config = await getPlatformConfigs();
+        setFallbackZapKey(config.fallback_zap_key || '');
+        setPackagePrice(Number(config.package_price || 0));
+        setReservationLockMinutes(Number(config.reservation_lock_minutes || 8));
+        setPlatformLaunchDate(config.platform_launch_date || config.referral_cutoff_date || '');
+      } catch (cErr) {
+        console.warn('Config fetch notice:', cErr);
+      }
+
       // 1. Fetch Users Summary
       let allUsers: any[] = [];
       try {
@@ -129,7 +147,7 @@ export const AdminDashboard: React.FC = () => {
     setSimulating(true);
     try {
       const generatedUtr = simUtr.trim() || `UTR${Date.now()}`;
-      const res = await settleP2PSale(simOrderId.trim(), 'SUCCESS', generatedUtr);
+      const res = await simulateAdminSettlement(simOrderId.trim(), generatedUtr);
 
       if (res.success) {
         showToast('success', 'Order Settled via Admin', `Order ${simOrderId} successfully marked settled with UTR ${generatedUtr}`);
@@ -143,6 +161,28 @@ export const AdminDashboard: React.FC = () => {
       showToast('error', 'Manual Settlement Failed', err.message);
     } finally {
       setSimulating(false);
+    }
+  };
+
+  const handleSavePlatformConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingConfig(true);
+    try {
+      const resKey = await updatePlatformConfig('fallback_zap_key', fallbackZapKey.trim());
+      const resPrice = await updatePlatformConfig('package_price', Number(packagePrice));
+      const resLock = await updatePlatformConfig('reservation_lock_minutes', Number(reservationLockMinutes));
+      const resDate = await updatePlatformConfig('platform_launch_date', platformLaunchDate.trim());
+
+      if (resKey.success && resPrice.success) {
+        showToast('success', 'Platform Config Saved', 'Live configs updated dynamically in platform_configs.');
+        await fetchAdminData();
+      } else {
+        throw new Error(resKey.message || resPrice.message || resLock.message || resDate.message || 'Failed to update config in database');
+      }
+    } catch (err: any) {
+      showToast('error', 'Update Failed', err.message);
+    } finally {
+      setSavingConfig(false);
     }
   };
 
@@ -247,9 +287,9 @@ export const AdminDashboard: React.FC = () => {
                 </tr>
               ) : (
                 merchantKeysList.map((key) => {
-                  const limit = Number(key.monthly_limit || 75000);
+                  const limit = Number(key.monthly_limit || 0);
                   const rec = Number(key.monthly_received_amount || 0);
-                  const pct = Math.min(100, Math.round((rec / limit) * 100));
+                  const pct = limit > 0 ? Math.min(100, Math.round((rec / limit) * 100)) : 0;
 
                   return (
                     <tr key={key.id} className="hover:bg-[#091122]/50">
@@ -294,6 +334,93 @@ export const AdminDashboard: React.FC = () => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Dynamic Platform Configuration (Zero Hardcoding) */}
+      <div className="p-6 rounded-3xl bg-[#091122]/80 backdrop-blur-xl border border-amber-500/30 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-amber-400">
+            <Key className="w-5 h-5" />
+            <h3 className="text-base font-bold font-display text-white">
+              Dynamic Platform Configuration (Database Stored • Zero Hardcoding)
+            </h3>
+          </div>
+          <span className="text-[11px] font-mono text-amber-300/80 bg-amber-950/60 px-2.5 py-1 rounded-lg border border-amber-500/30">
+            platform_configs Live Table
+          </span>
+        </div>
+        <p className="text-xs text-slate-300 leading-relaxed">
+          The emergency fallback ZapKey and package pricing are fetched directly from your Supabase <code className="text-amber-300 font-mono">platform_configs</code> table. Members' direct payouts use their own registered merchant ZapKeys first; if unconfigured, this live fallback key is allocated.
+        </p>
+
+        <form onSubmit={handleSavePlatformConfig} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-mono uppercase text-slate-400 mb-1">
+              Fallback Admin ZapKey
+            </label>
+            <input
+              type="text"
+              required
+              value={fallbackZapKey}
+              onChange={(e) => setFallbackZapKey(e.target.value)}
+              placeholder="e.g. ZapXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#050811] border border-amber-500/40 focus:border-amber-400 text-amber-300 font-mono text-xs focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-mono uppercase text-slate-400 mb-1">
+              Package Price (INR)
+            </label>
+            <input
+              type="number"
+              required
+              min={1}
+              value={packagePrice}
+              onChange={(e) => setPackagePrice(Number(e.target.value))}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#050811] border border-amber-500/40 focus:border-amber-400 text-white font-mono text-xs focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-mono uppercase text-slate-400 mb-1">
+              Reservation Lock (Mins)
+            </label>
+            <input
+              type="number"
+              required
+              min={1}
+              max={60}
+              value={reservationLockMinutes}
+              onChange={(e) => setReservationLockMinutes(Number(e.target.value))}
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#050811] border border-amber-500/40 focus:border-amber-400 text-white font-mono text-xs focus:outline-none"
+            />
+          </div>
+
+          <div className="md:col-span-3">
+            <label className="block text-xs font-mono uppercase text-slate-400 mb-1">
+              Platform Launch / Referral Cutoff Date
+            </label>
+            <input
+              type="text"
+              value={platformLaunchDate}
+              onChange={(e) => setPlatformLaunchDate(e.target.value)}
+              placeholder="e.g. 2026-10-21"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-[#050811] border border-amber-500/40 focus:border-amber-400 text-white font-mono text-xs focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-end">
+            <button
+              type="submit"
+              disabled={savingConfig}
+              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              {savingConfig ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+              <span>Save Configuration</span>
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* 2 Cols: Manual Settlement Simulator + Global Transactions Feed */}

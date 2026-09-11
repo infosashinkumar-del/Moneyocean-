@@ -147,9 +147,15 @@ DECLARE
     v_is_passup BOOLEAN := false;
     v_passup_reason TEXT := 'DIRECT_REFERRAL_100PCT';
     v_order_id TEXT;
-    v_zap_key TEXT := 'Zapf51bf8673c78299aef19410cc987e265';
+    v_zap_key TEXT := NULL;
+    v_package_price NUMERIC(12, 2) := 0.00;
     v_existing_tx RECORD;
 BEGIN
+    -- Dynamically read package price and fallback zap key from platform_configs
+    SELECT COALESCE(value::NUMERIC, 0.00) INTO v_package_price 
+    FROM public.platform_configs 
+    WHERE key = 'package_price';
+
     -- Idempotency Check: अगर यह की (Key) पहले से मौजूद है, तो वही ऑर्डर वापस करें
     IF p_idempotency_key IS NOT NULL THEN
         SELECT * INTO v_existing_tx FROM public.transactions WHERE idempotency_key = p_idempotency_key;
@@ -216,8 +222,9 @@ BEGIN
     ORDER BY priority_order ASC 
     LIMIT 1;
 
+    -- If beneficiary has no key configured, query dynamic fallback from platform_configs
     IF v_zap_key IS NULL OR LENGTH(TRIM(v_zap_key)) < 6 THEN
-        v_zap_key := 'Zapf51bf8673c78299aef19410cc987e265';
+        SELECT value INTO v_zap_key FROM public.platform_configs WHERE key = 'fallback_zap_key';
     END IF;
 
     -- 5. यूनिक ऑर्डर ID जनरेट करें
@@ -240,7 +247,7 @@ BEGIN
         p_buyer_id,
         v_beneficiary.id,
         v_passup_reason,
-        5000.00,
+        v_package_price,
         'PENDING',
         'INITIATED',
         v_zap_key
@@ -250,7 +257,7 @@ BEGIN
         'success', true,
         'order_id', v_order_id,
         'zap_key', v_zap_key,
-        'amount', 5000,
+        'amount', v_package_price,
         'sale_number', v_sale_number,
         'is_passup', v_is_passup,
         'passup_reason', v_passup_reason,

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 
 export const Footer: React.FC<{ onNavigate: (route: string) => void }> = ({ onNavigate }) => {
   const { packagePrice, platformConfig } = useAuth();
-  const unitPrice = packagePrice || 5000;
+  const unitPrice = packagePrice;
   const lockMins = platformConfig?.reservation_lock_minutes || 8;
 
   return (

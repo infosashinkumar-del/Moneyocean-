@@ -9,7 +9,7 @@ import { PassupLog } from '../types';
 
 export const PassupLogs: React.FC = () => {
   const { user, packagePrice } = useAuth();
-  const unitPrice = packagePrice || 5000;
+  const unitPrice = packagePrice;
   const [logs, setLogs] = useState<PassupLog[]>([]);
   const [loading, setLoading] = useState(true);
 
