@@ -2,6 +2,8 @@ export interface PlatformConfig {
   package_price: number;
   reservation_lock_minutes?: number;
   fallback_zap_key?: string;
+  marketing_plan_pdf_url?: string;
+  platform_launch_date?: string;
   [key: string]: any;
 }
 

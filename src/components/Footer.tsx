@@ -1,9 +1,11 @@
-import React from 'react';
-import { Waves, Shield, CheckCircle2, Lock, ArrowUpRight, Zap, RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Waves, Shield, CheckCircle2, Lock, ArrowUpRight, Zap, RefreshCw, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { MarketingPlanModal } from './MarketingPlanModal';
 
 export const Footer: React.FC<{ onNavigate: (route: string) => void }> = ({ onNavigate }) => {
   const { packagePrice, platformConfig } = useAuth();
+  const [showMarketingModal, setShowMarketingModal] = useState(false);
   const unitPrice = packagePrice;
   const lockMins = platformConfig?.reservation_lock_minutes || 8;
 
@@ -57,6 +59,15 @@ export const Footer: React.FC<{ onNavigate: (route: string) => void }> = ({ onNa
               <li>
                 <button onClick={() => onNavigate('checkout')} className="hover:text-cyan-400 transition-colors">
                   Activation Gateway
+                </button>
+              </li>
+              <li>
+                <button 
+                  onClick={() => setShowMarketingModal(true)} 
+                  className="hover:text-[#e5a93c] text-amber-400/90 font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <FileText className="w-3.5 h-3.5 text-[#e5a93c]" />
+                  <span>Marketing Plan (PDF)</span>
                 </button>
               </li>
             </ul>
@@ -113,6 +124,12 @@ export const Footer: React.FC<{ onNavigate: (route: string) => void }> = ({ onNa
           </div>
         </div>
       </div>
+
+      {/* Marketing Plan Presentation Modal */}
+      <MarketingPlanModal 
+        isOpen={showMarketingModal} 
+        onClose={() => setShowMarketingModal(false)} 
+      />
     </footer>
   );
 };

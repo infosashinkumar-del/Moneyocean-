@@ -25,6 +25,24 @@ EXCEPTION
 END $$;
 
 -- ============================================================================
+-- PLATFORM CONFIGURATIONS (Single Source of Truth)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.platform_configs (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    description TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO public.platform_configs (key, value, description)
+VALUES 
+    ('package_price', '5000', 'Activation package price in INR'),
+    ('reservation_lock_minutes', '8', 'Checkout node reservation lock duration in minutes'),
+    ('fallback_zap_key', '""', 'Fallback ZapUPI merchant API key'),
+    ('marketing_plan_pdf_url', '"https://gedbbysyehtdaqgkrmqk.supabase.co/storage/v1/object/public/marketing%20plan/moneyoceantop.pdf"', 'Official marketing plan presentation PDF URL')
+ON CONFLICT (key) DO NOTHING;
+
+-- ============================================================================
 -- 2. USERS TABLE (IF NOT EXISTS)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS public.users (

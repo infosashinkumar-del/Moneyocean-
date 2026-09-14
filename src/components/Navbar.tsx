@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Waves, ArrowRight, Menu, X, ChevronRight, User as UserIcon } from 'lucide-react';
+import { Waves, ArrowRight, Menu, X, ChevronRight, User as UserIcon, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { MarketingPlanModal } from './MarketingPlanModal';
 
 interface NavbarProps {
   onNavigate: (route: string) => void;
@@ -9,6 +10,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentRoute }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showMarketingModal, setShowMarketingModal] = useState(false);
   const { authUser } = useAuth();
 
   const navLinks = [
@@ -65,6 +67,13 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentRoute }) => {
               {link.label}
             </button>
           ))}
+          <button
+            onClick={() => setShowMarketingModal(true)}
+            className="text-sm font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <FileText className="w-4 h-4 text-[#e5a93c]" />
+            <span>Marketing Plan (PDF)</span>
+          </button>
         </nav>
 
         {/* Action Buttons */}
@@ -120,6 +129,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentRoute }) => {
               {link.label}
             </button>
           ))}
+          <button
+            onClick={() => {
+              setMobileMenuOpen(false);
+              setShowMarketingModal(true);
+            }}
+            className="flex items-center gap-2 w-full text-left py-2 text-base font-semibold text-amber-400 hover:text-amber-300"
+          >
+            <FileText className="w-4 h-4 text-[#e5a93c]" />
+            <span>Marketing Plan (PDF)</span>
+          </button>
           <div className="pt-4 border-t border-slate-800 flex flex-col gap-3">
             {authUser ? (
               <button
@@ -156,6 +175,11 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentRoute }) => {
           </div>
         </div>
       )}
+      {/* Marketing Plan Presentation Modal */}
+      <MarketingPlanModal 
+        isOpen={showMarketingModal} 
+        onClose={() => setShowMarketingModal(false)} 
+      />
     </header>
   );
 };

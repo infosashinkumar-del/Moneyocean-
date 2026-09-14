@@ -13,12 +13,14 @@ import {
   Users, 
   Target, 
   Compass, 
-  DollarSign 
+  DollarSign,
+  FileText 
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Navbar } from '../components/Navbar';
 import { Footer } from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
+import { MarketingPlanModal } from '../components/MarketingPlanModal';
 
 interface LandingPageProps {
   onNavigate: (route: string) => void;
@@ -26,6 +28,7 @@ interface LandingPageProps {
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
   const { packagePrice, platformConfig } = useAuth();
+  const [showMarketingModal, setShowMarketingModal] = useState(false);
   const unitPrice = packagePrice;
   const lockMins = platformConfig?.reservation_lock_minutes || 8;
 
@@ -92,13 +95,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
               </button>
 
               <button
+                onClick={() => setShowMarketingModal(true)}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 font-semibold text-base transition-all cursor-pointer shadow-lg shadow-amber-500/10"
+              >
+                <FileText className="w-5 h-5 text-[#e5a93c]" />
+                <span>View Marketing Plan (PDF)</span>
+              </button>
+
+              <button
                 onClick={() => {
                   const el = document.getElementById('how-it-works');
                   el?.scrollIntoView({ behavior: 'smooth' });
                 }}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-[#0f1420]/90 hover:bg-[#161e30] border border-[#263147] text-slate-200 font-semibold text-base transition-all cursor-pointer"
               >
-                <span>View Mathematical Model</span>
+                <span>Mathematical Model</span>
               </button>
             </div>
           </motion.div>
@@ -234,12 +245,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
               </p>
             </div>
 
-            <button
-              onClick={() => onNavigate('signup')}
-              className="px-6 py-3.5 rounded-xl gold-btn-gradient font-bold text-sm shrink-0 cursor-pointer"
-            >
-              Activate Your Earning Slot
-            </button>
+            <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0">
+              <button
+                onClick={() => setShowMarketingModal(true)}
+                className="w-full sm:w-auto px-5 py-3.5 rounded-xl bg-[#121824] hover:bg-[#182133] border border-[#23314d] text-amber-300 font-semibold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer hover:border-amber-500/40"
+              >
+                <FileText className="w-4 h-4 text-[#e5a93c]" />
+                <span>Download Marketing Plan (PDF)</span>
+              </button>
+              <button
+                onClick={() => onNavigate('signup')}
+                className="w-full sm:w-auto px-6 py-3.5 rounded-xl gold-btn-gradient font-bold text-sm shrink-0 cursor-pointer"
+              >
+                Activate Your Earning Slot
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -301,6 +321,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
           </button>
         </div>
       </section>
+
+      {/* Marketing Plan Presentation Modal */}
+      <MarketingPlanModal 
+        isOpen={showMarketingModal} 
+        onClose={() => setShowMarketingModal(false)} 
+      />
 
       <Footer onNavigate={onNavigate} />
     </div>

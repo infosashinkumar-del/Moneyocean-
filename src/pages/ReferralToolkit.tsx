@@ -6,26 +6,73 @@ import {
   Send, 
   QrCode, 
   MessageSquare, 
-  Sparkles 
+  Sparkles,
+  FileText,
+  Download,
+  ExternalLink,
+  Eye
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../components/Toast';
 import { getLiveReferralUrl } from '../lib/supabase';
 import { ReferralCard } from '../components/ReferralCard';
+import { MarketingPlanModal } from '../components/MarketingPlanModal';
 
 interface ReferralToolkitProps {
   onNavigateCheckout?: () => void;
 }
 
 export const ReferralToolkit: React.FC<ReferralToolkitProps> = ({ onNavigateCheckout }) => {
-  const { user, packagePrice } = useAuth();
+  const { user, packagePrice, platformConfig } = useAuth();
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCopyIndex, setCopiedCopyIndex] = useState<number | null>(null);
+  const [showMarketingModal, setShowMarketingModal] = useState(false);
+  const [copiedPdfLink, setCopiedPdfLink] = useState(false);
+
+  const defaultPdfUrl = 'https://gedbbysyehtdaqgkrmqk.supabase.co/storage/v1/object/public/marketing%20plan/moneyoceantop.pdf';
+  const pdfUrl = (platformConfig?.marketing_plan_pdf_url || defaultPdfUrl).trim();
   
   const unitPrice = packagePrice;
   const referralCode = user?.referral_code || '';
   const cleanReferralUrl = getLiveReferralUrl(referralCode);
+
+  const handleCopyPdfLink = () => {
+    navigator.clipboard.writeText(pdfUrl);
+    setCopiedPdfLink(true);
+    showToast('success', 'Marketing Plan Link Copied!', pdfUrl);
+    setTimeout(() => setCopiedPdfLink(false), 2500);
+  };
+
+  const handleDownloadPdf = async () => {
+    try {
+      const res = await fetch(pdfUrl);
+      if (!res.ok) throw new Error('Download request failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'MoneyOcean_Marketing_Plan.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      showToast('success', 'Downloaded!', 'Marketing plan presentation saved.');
+    } catch {
+      const a = document.createElement('a');
+      a.href = pdfUrl;
+      a.target = '_blank';
+      a.download = 'MoneyOcean_Marketing_Plan.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  };
+
+  const handleShareWhatsAppPdf = () => {
+    const text = `🌊 *MoneyOcean - Official Marketing Plan Presentation (PDF)* 📊\n\nCheck out the official MoneyOcean compensation plan & decentralized P2P architecture:\n\n📄 *Download/View PDF Presentation:* ${pdfUrl}\n\n👉 *Join my team and activate your earning node:* ${cleanReferralUrl}\n\nEarn 100% direct UPI payments settled in seconds!`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+  };
 
   const handleCopy = (text: string, isMainLink = false, index?: number) => {
     navigator.clipboard.writeText(text);
@@ -89,6 +136,66 @@ export const ReferralToolkit: React.FC<ReferralToolkitProps> = ({ onNavigateChec
 
       {/* Referral Status & Link Activation Card */}
       <ReferralCard onNavigateCheckout={onNavigateCheckout} />
+
+      {/* Dedicated Marketing Plan Presentation & Download Card */}
+      <div className="p-6 sm:p-8 rounded-3xl bg-[#0c1017]/95 backdrop-blur-xl border border-amber-500/30 shadow-xl relative overflow-hidden group">
+        <div className="absolute top-0 right-0 w-80 h-40 bg-amber-500/10 blur-3xl pointer-events-none" />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+          <div className="space-y-3 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-950/80 border border-amber-500/40 text-amber-300 text-xs font-mono font-semibold">
+              <FileText className="w-3.5 h-3.5 text-amber-400" />
+              <span>OFFICIAL MARKETING PLAN PRESENTATION (PDF)</span>
+            </div>
+            <h3 className="text-xl sm:text-2xl font-bold font-display text-white">
+              Official Compensation Plan & System Deck
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Equip your prospects with the verified compensation matrix breakdown, 2-up pass-up algorithms, and transparent UPI payout model. Preview inside the app, download, or copy the direct cloud link.
+            </p>
+            
+            {/* Quick Link Preview Pill */}
+            <div className="flex items-center gap-2 text-xs font-mono text-slate-400 bg-[#07090e] p-2.5 rounded-xl border border-[#1a2334] max-w-xl">
+              <span className="text-[#e5a93c] font-bold shrink-0">PDF Link:</span>
+              <span className="truncate text-slate-300">{pdfUrl}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap sm:flex-nowrap items-stretch sm:items-center gap-3 shrink-0">
+            <button
+              onClick={() => setShowMarketingModal(true)}
+              className="flex-1 sm:flex-none px-5 py-3 rounded-xl gold-btn-gradient text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20 hover:shadow-amber-500/35 hover:scale-[1.02] transition-all"
+            >
+              <Eye className="w-4 h-4" />
+              <span>View Presentation</span>
+            </button>
+
+            <button
+              onClick={handleDownloadPdf}
+              className="flex-1 sm:flex-none px-4 py-3 rounded-xl bg-[#121824] hover:bg-[#182133] border border-[#23314d] text-slate-200 hover:text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+            >
+              <Download className="w-4 h-4 text-[#e5a93c]" />
+              <span>Download PDF</span>
+            </button>
+
+            <button
+              onClick={handleCopyPdfLink}
+              className="px-4 py-3 rounded-xl bg-[#121824] hover:bg-[#182133] border border-[#23314d] text-slate-200 hover:text-white text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+              title="Copy direct PDF link"
+            >
+              {copiedPdfLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              <span className="hidden md:inline">{copiedPdfLink ? 'Copied' : 'Copy Link'}</span>
+            </button>
+
+            <button
+              onClick={handleShareWhatsAppPdf}
+              className="p-3 rounded-xl bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 transition-all cursor-pointer flex items-center justify-center"
+              title="Share Marketing Plan on WhatsApp"
+            >
+              <MessageSquare className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 p-6 sm:p-8 rounded-3xl bg-[#0c1017]/90 backdrop-blur-xl border border-[#1c2436] shadow-xl space-y-6">
@@ -214,6 +321,12 @@ export const ReferralToolkit: React.FC<ReferralToolkitProps> = ({ onNavigateChec
           ))}
         </div>
       </div>
+
+      {/* Marketing Plan Presentation Modal */}
+      <MarketingPlanModal 
+        isOpen={showMarketingModal} 
+        onClose={() => setShowMarketingModal(false)} 
+      />
     </div>
   );
 };

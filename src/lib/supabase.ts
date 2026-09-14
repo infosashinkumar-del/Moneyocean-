@@ -74,7 +74,8 @@ export async function getPlatformConfigs(): Promise<PlatformConfig> {
     reservation_lock_minutes: 8,
     fallback_zap_key: '',
     referral_cutoff_date: '',
-    platform_launch_date: ''
+    platform_launch_date: '',
+    marketing_plan_pdf_url: 'https://gedbbysyehtdaqgkrmqk.supabase.co/storage/v1/object/public/marketing%20plan/moneyoceantop.pdf'
   };
 
   try {
