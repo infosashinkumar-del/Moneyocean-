@@ -34,7 +34,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
   const { user, authUser, refreshUserData, packagePrice, platformConfig } = useAuth();
   const lockMinutes = Number(platformConfig?.reservation_lock_minutes || 8);
   const [checkoutStep, setCheckoutStep] = useState<'invoice' | 'payment'>('invoice');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [slotLockedError, setSlotLockedError] = useState<string | null>(null);
 
   const [orderId, setOrderId] = useState<string>('');
@@ -92,6 +92,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
   const isInitializingRef = useRef<boolean>(false);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Yeh function ab sirf tab chalega jab user "Proceed to Pay" dabayega
   const initSession = async () => {
     if (!authUser?.id) return;
     if (isInitializingRef.current) return;
@@ -130,7 +131,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
       if (res.error_code === 'SLOT_IN_PROGRESS') {
         setSlotLockedError(res.message || `Payment slot is currently locked by another buyer. Please retry in ${lockMinutes} minutes.`);
         setLoading(false);
-        return;
+        return false;
       }
 
       if (res.success && res.order_id) {
@@ -173,6 +174,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
         } else if (benUpi) {
           setPaytmButton(`paytmmp://pay?pa=${encodeURIComponent(benUpi)}&pn=${encodeURIComponent(rName || 'MoneyOcean')}&am=${orderAmt}&tr=${res.order_id}&cu=INR`);
         }
+        return res;
       } else {
         throw new Error(res.message || 'Could not allocate reservation slot');
       }
@@ -180,15 +182,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
       console.error('Session init error:', err);
       setSlotLockedError(err.message || 'Failed to initialize payment slot. Please retry.');
       showToast('error', 'Checkout Init Failed', err.message || 'Failed to initialize payment');
+      return null;
     } finally {
       setLoading(false);
       isInitializingRef.current = false;
     }
   };
-
-  useEffect(() => {
-    initSession();
-  }, [authUser?.id, packagePrice]);
 
   const handleFinalStatus = async (status: 'SUCCESS' | 'FAILED' | 'TIMEOUT', customUtr?: string) => {
     if (finalHandledRef.current) return;
@@ -304,7 +303,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
   };
 
   useEffect(() => {
-    if (loading || slotLockedError || finalHandledRef.current) return;
+    if (checkoutStep !== 'payment' || loading || slotLockedError || finalHandledRef.current) return;
     timerIntervalRef.current = setInterval(() => {
       setRemainingSeconds((prev) => {
         if (prev <= 1) {
@@ -318,11 +317,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [loading, slotLockedError]);
+  }, [checkoutStep, loading, slotLockedError]);
 
-  // Safe Database Polling Every 5 Seconds (Load-Balanced)
+  // Safe Database Polling Every 5 Seconds
   useEffect(() => {
-    if (!orderId || loading || slotLockedError || finalHandledRef.current) return;
+    if (!orderId || checkoutStep !== 'payment' || finalHandledRef.current) return;
     const pollDatabase = async () => {
       if (finalHandledRef.current) return;
       try {
@@ -361,11 +360,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
       clearInterval(dbPollInterval);
       supabase.removeChannel(channel);
     };
-  }, [orderId, loading, slotLockedError]);
+  }, [orderId, checkoutStep]);
 
   // Auto-Check Polling via Gateway Every 5 Seconds
   useEffect(() => {
-    if (!payId || loading || slotLockedError || finalHandledRef.current) return;
+    if (!payId || checkoutStep !== 'payment' || finalHandledRef.current) return;
     const autoPoll = async () => {
       if (!pollActiveRef.current || pollBusyRef.current || manualCheckBusyRef.current || finalHandledRef.current) {
         return;
@@ -391,7 +390,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     const pollInterval = setInterval(autoPoll, 5000);
     autoPoll();
     return () => clearInterval(pollInterval);
-  }, [payId, loading, slotLockedError]);
+  }, [payId, checkoutStep]);
 
   const handleVerifyUtr = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -496,10 +495,10 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
         <div className="w-full max-w-[500px] p-10 rounded-3xl bg-[#08101e] backdrop-blur-xl border border-emerald-500/20 shadow-2xl text-center space-y-4">
           <RefreshCw className="w-8 h-8 animate-spin mx-auto text-emerald-400" />
           <h3 className="text-lg font-bold font-display text-white">
-            Calculating Beneficiary & Invoice...
+            Allocating Payment Slot...
           </h3>
           <p className="text-xs text-slate-400 max-w-xs mx-auto font-mono">
-            Checking 2-Up pass-up matrix routing and preparing your itemized bill breakdown...
+            Connecting to secure P2P ledger and generating payment parameters...
           </p>
         </div>
       ) : slotLockedError ? (
@@ -516,10 +515,10 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
             </p>
           </div>
           <button
-            onClick={initSession}
+            onClick={() => setSlotLockedError(null)}
             className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all cursor-pointer font-mono"
           >
-            Check Slot Availability
+            Try Again
           </button>
         </div>
       ) : checkoutStep === 'invoice' ? (
@@ -541,65 +540,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
             </div>
           </div>
 
-          <div className={`p-4 rounded-2xl border ${isPassup ? 'bg-cyan-950/20 border-cyan-500/40' : 'bg-emerald-950/20 border-emerald-500/40'} space-y-3`}>
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                <UserCheck className="w-4 h-4 text-emerald-400" />
-                <span>Paisa Kisko Ja Raha Hai (Beneficiary)</span>
-              </span>
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
-                isPassup 
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' 
-                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-              }`}>
-                {isPassup ? '2-Up Pass-Up' : 'Direct Referral'}
-              </span>
-            </div>
-
-            <div className="bg-[#030712] rounded-xl p-3.5 border border-slate-800 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-[10px] font-mono text-slate-400">Beneficiary Name (Receiver)</div>
-                  <div className="text-base font-bold text-white tracking-tight flex items-center gap-1.5">
-                    <span>{routingInfo.beneficiary_name || 'Admin Beneficiary'}</span>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  </div>
-                </div>
-                {routingInfo.beneficiary_referral_code && (
-                  <div className="text-right">
-                    <div className="text-[10px] font-mono text-slate-400">Referral Code</div>
-                    <div className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/30">
-                      {routingInfo.beneficiary_referral_code}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-2 border-t border-slate-800/80 text-xs">
-                <div className="flex items-start gap-2">
-                  <TrendingUp className={`w-4 h-4 mt-0.5 shrink-0 ${isPassup ? 'text-cyan-400' : 'text-emerald-400'}`} />
-                  <div>
-                    <div className="font-semibold text-slate-200">
-                      Routing Reason: <span className={isPassup ? 'text-cyan-300' : 'text-emerald-300'}>{routingInfo.reason || (isPassup ? 'Pass-up to Qualifying Upline' : 'Direct 100% Sponsor Commission')}</span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                      {isPassup 
-                        ? `MoneyOcean 2-Up Matrix niyam ke mutabiq, yeh sale Qualifying Upline ko pass-up ho rahi hai. Poora ₹${Number(amount).toLocaleString('en-IN')} direct samne wale ko transfer hoga.`
-                        : `Yeh direct referral sale hai. Poora ₹${Number(amount).toLocaleString('en-IN')} commission 100% seedha aapke sponsor ko bina kisi middleman ke milega.`}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div className="p-4 rounded-2xl bg-[#030712] border border-slate-800 space-y-3">
             <div className="flex items-center justify-between text-xs font-mono text-slate-400">
               <span className="flex items-center gap-1 font-bold text-slate-300 uppercase tracking-wider">
                 <FileText className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Invoice / Bill Breakdown</span>
               </span>
-              <span className="tabular-nums">Order #{orderId ? orderId.slice(-6) : '1'}</span>
+              <span className="tabular-nums">Activation Fee</span>
             </div>
 
             <div className="space-y-2 text-xs pt-1 border-t border-slate-800">
@@ -608,7 +555,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
                   <div className="font-semibold text-slate-200">MoneyOcean ID Activation</div>
                   <div className="text-[10px] text-slate-400 font-mono">Lifetime P2P Commission Rights + Dashboard</div>
                 </div>
-                <div className="font-mono font-bold text-slate-100 tabular-nums">₹{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                <div className="font-mono font-bold text-slate-100 tabular-nums">₹{Number(packagePrice || 1).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
               </div>
               <div className="flex justify-between items-center py-1 text-slate-400">
                 <div className="flex items-center gap-1">
@@ -623,7 +570,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
                   <div className="text-[10px] font-mono text-emerald-400">100% Peer Transfer</div>
                 </div>
                 <div className="text-2xl font-extrabold font-display text-emerald-400 tabular-nums">
-                  ₹{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹{Number(packagePrice || 1).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
               </div>
             </div>
@@ -642,20 +589,58 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
             <button
               type="button"
               id="payNowProceedButton"
-              onClick={() => {
-                setCheckoutStep('payment');
-                if (paymentUrl && typeof window !== 'undefined' && (window as any).ZapUPI) {
-                  try {
-                    (window as any).ZapUPI.loadPayment(paymentUrl);
-                  } catch (e) {
-                    console.warn('ZapUPI load notice:', e);
+              onClick={async () => {
+                const checkoutRes = await initSession();
+                if (checkoutRes && checkoutRes.success) {
+                  setCheckoutStep('payment');
+                  
+                  const targetPaymentUrl = checkoutRes.payment_url || paymentUrl;
+                  const targetZapKey = checkoutRes.zap_key || dynamicZapKey || platformConfig?.fallback_zap_key || '';
+                  const targetOrderId = checkoutRes.order_id || orderId;
+                  const targetAmount = Number(checkoutRes.payment?.amount_inr || checkoutRes.amount || packagePrice || 1);
+
+                  // If ZapUPI kit script is loaded in window
+                  if (typeof window !== 'undefined' && (window as any).ZapUPI) {
+                    try {
+                      if (targetPaymentUrl) {
+                        (window as any).ZapUPI.loadPayment(targetPaymentUrl);
+                        return;
+                      } else if (targetZapKey && targetOrderId) {
+                        (window as any).ZapUPI.createOrder(
+                          {
+                            zap_key: targetZapKey.trim(),
+                            order_id: targetOrderId.trim(),
+                            amount: targetAmount.toFixed(2),
+                            customer_mobile: user?.mobile || '',
+                            remark: `MoneyOcean|${user?.referral_code || 'P2P'}`
+                          },
+                          {
+                            onResponse: (url: string) => {
+                              if ((window as any).ZapUPI) {
+                                (window as any).ZapUPI.loadPayment(url);
+                              } else {
+                                window.location.href = url;
+                              }
+                            },
+                            onError: (errMsg: string) => {
+                              console.warn('ZapUPI createOrder notice:', errMsg);
+                            }
+                          }
+                        );
+                        return;
+                      }
+                    } catch (zapErr) {
+                      console.warn('ZapUPI launch notice:', zapErr);
+                    }
+                  } else if (targetPaymentUrl) {
+                    window.location.href = targetPaymentUrl;
                   }
                 }
               }}
               className="w-full text-center py-4 px-4 rounded-xl font-bold text-base bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
             >
               <Zap className="w-5 h-5 fill-slate-950" />
-              <span>Proceed to Pay ₹{Number(amount).toLocaleString('en-IN')}</span>
+              <span>Pay via ZapUPI</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -906,7 +891,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
                 <button
                   onClick={() => {
                     setCheckoutStep('invoice');
-                    initSession();
+                    setSlotLockedError(null);
                   }}
                   className="w-full py-3 rounded-xl bg-[#030712] hover:bg-slate-900 border border-slate-700 text-slate-200 font-bold text-xs transition-all cursor-pointer font-mono"
                 >
