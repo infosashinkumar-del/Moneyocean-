@@ -757,46 +757,124 @@ export async function toggleUserMerchantKeyStatus(keyId: string, isActive: boole
   }
 }
 
-// 9. Live Team Tree (Strict Database Query)
-export async function getTeamTree(userId: string): Promise<any[]> {
+// 9. Live Team Tree (Strict Database Query with Unlimited Dynamic Drill-Down & Backend Ledger Attribution)
+export async function getNodeDownlines(nodeId: string): Promise<any[]> {
   try {
-    const { data: directMembers, error } = await supabase
+    const { data: directs, error } = await supabase
       .from('users')
       .select('id, full_name, email, referral_code, is_active, joining_date, direct_referrals_count, team_size, total_income, sponsor_id')
-      .eq('sponsor_id', userId)
+      .eq('sponsor_id', nodeId)
       .order('joining_date', { ascending: true });
 
-    if (!error && directMembers && Array.isArray(directMembers)) {
-      if (directMembers.length === 0) {
-        return [];
-      }
-      const directIds = directMembers.map(m => m.id);
-      const { data: level2Members, error: l2Err } = await supabase
+    if (error) {
+      console.warn('[Supabase] getNodeDownlines query error:', error.message);
+      return [];
+    }
+
+    if (!directs || directs.length === 0) {
+      return [];
+    }
+
+    const directIds = directs.map(d => d.id);
+
+    // Concurrently fetch Level 2 grandchildren, plus settled transactions, sale ledger, and passup logs for accurate attribution
+    const [{ data: subDirects }, { data: txRecords }, { data: passupRecords }, { data: ledgerRecords }] = await Promise.all([
+      supabase
         .from('users')
         .select('id, full_name, email, referral_code, is_active, joining_date, direct_referrals_count, team_size, total_income, sponsor_id')
         .in('sponsor_id', directIds)
-        .order('joining_date', { ascending: true });
+        .order('joining_date', { ascending: true }),
+      supabase
+        .from('transactions')
+        .select('buyer_user_id, beneficiary_user_id, sponsor_id, sale_number, is_passup, transaction_type, amount, payment_status, utr_number, created_at')
+        .eq('payment_status', 'SUCCESS')
+        .or(`sponsor_id.eq.${nodeId},beneficiary_user_id.eq.${nodeId},buyer_user_id.in.(${directIds.join(',')}),sponsor_id.in.(${directIds.join(',')})`),
+      supabase
+        .from('passup_logs')
+        .select('original_referrer_id, passed_to_id, sale_number, amount, passup_reason, created_at')
+        .or(`original_referrer_id.eq.${nodeId},passed_to_id.eq.${nodeId},original_referrer_id.in.(${directIds.join(',')})`),
+      supabase
+        .from('sale_ledger')
+        .select('sale_number, sponsor_id, buyer_user_id, beneficiary_user_id, is_passup, amount, created_at')
+        .or(`sponsor_id.eq.${nodeId},beneficiary_user_id.eq.${nodeId},sponsor_id.in.(${directIds.join(',')})`)
+    ]);
 
-      if (l2Err) {
-        console.warn('level2Members query error:', l2Err.message);
-      }
+    const allTx = txRecords || [];
+    const allPassups = passupRecords || [];
+    const allLedger = ledgerRecords || [];
+    const subList = subDirects || [];
 
-      const tree = directMembers.map(member => {
-        const children = (level2Members || []).filter(l2 => l2.sponsor_id === member.id);
+    return directs.map(member => {
+      // Find direct transaction and ledger for this member
+      const memberTx = allTx.find(t => t.buyer_user_id === member.id);
+      const memberLedger = allLedger.find(l => l.buyer_user_id === member.id);
+      const memberPassup = allPassups.find(p => p.original_referrer_id === nodeId && (p.sale_number === memberTx?.sale_number || p.sale_number === memberLedger?.sale_number));
+
+      // Real sale number from sale_ledger, transaction, or passup log (NOT frontend array indexing)
+      const sale_number = memberLedger?.sale_number ?? memberTx?.sale_number ?? memberPassup?.sale_number ?? null;
+
+      // Real pass-up verification from database
+      const isPassUp = Boolean(
+        memberLedger?.is_passup ||
+        memberTx?.is_passup || 
+        memberTx?.transaction_type?.includes('PASSUP') || 
+        (memberLedger && memberLedger.beneficiary_user_id !== nodeId) ||
+        (memberTx && memberTx.beneficiary_user_id !== nodeId) ||
+        memberPassup
+      );
+
+      // Level 2 children for this member
+      const memberChildren = subList.filter(s => s.sponsor_id === member.id).map(child => {
+        const childTx = allTx.find(t => t.buyer_user_id === child.id);
+        const childLedger = allLedger.find(l => l.buyer_user_id === child.id);
+        const childPassup = allPassups.find(p => p.original_referrer_id === member.id && p.passed_to_id === nodeId);
+        const childSaleNumber = childLedger?.sale_number ?? childTx?.sale_number ?? (childPassup?.sale_number || null);
+
+        // Child passed up to nodeId if beneficiary is nodeId or passup log matches
+        const isChildPassupToNode = Boolean(
+          (childLedger && childLedger.beneficiary_user_id === nodeId) ||
+          (childTx && childTx.beneficiary_user_id === nodeId) ||
+          childPassup ||
+          (childTx?.is_passup && (childSaleNumber === 1 || childSaleNumber === 3)) ||
+          (childLedger?.is_passup && (childSaleNumber === 1 || childSaleNumber === 3))
+        );
+
         return {
-          ...member,
-          level: 1,
-          children: children.map(c => ({ ...c, level: 2 }))
+          ...child,
+          level: 2,
+          sale_number: childSaleNumber,
+          saleNum: childSaleNumber,
+          is_passup: Boolean(childLedger?.is_passup || childTx?.is_passup || childPassup),
+          isChildPassupToYou: isChildPassupToNode,
+          childMoney: (isChildPassupToNode && (childLedger?.amount || childTx?.amount)) ? Number(childLedger?.amount || childTx?.amount) : 0,
+          utr: childTx?.utr_number || null,
+          children: []
         };
       });
 
-      return tree;
-    }
-    if (error) {
-      console.warn('getTeamTree query error:', error.message);
-    }
+      return {
+        ...member,
+        level: 1,
+        sale_number,
+        saleNum: sale_number,
+        is_passup: isPassUp,
+        flowType: isPassUp ? 'PASS_UP' : 'DIRECT_KEEP',
+        moneyReceived: (!isPassUp && memberTx?.amount) ? Number(memberTx.amount) : 0,
+        utr: memberTx?.utr_number || null,
+        children: memberChildren
+      };
+    });
+  } catch (err) {
+    console.error('[Supabase] getNodeDownlines exception:', err);
+    return [];
+  }
+}
+
+export async function getTeamTree(userId: string): Promise<any[]> {
+  try {
+    return await getNodeDownlines(userId);
   } catch (err) {
     console.error('Team tree fetch exception:', err);
+    return [];
   }
-  return [];
 }

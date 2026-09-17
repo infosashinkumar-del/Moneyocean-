@@ -131,7 +131,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
       if (res.error_code === 'SLOT_IN_PROGRESS') {
         setSlotLockedError(res.message || `Payment slot is currently locked by another buyer. Please retry in ${lockMinutes} minutes.`);
         setLoading(false);
-        return false;
+        return null; // Change from 'return false' to 'return null'
       }
 
       if (res.success && res.order_id) {

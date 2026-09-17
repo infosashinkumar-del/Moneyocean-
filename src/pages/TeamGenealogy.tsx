@@ -9,29 +9,23 @@ import {
   RefreshCw,
   ArrowUpRight,
   ArrowDownLeft,
-  Wallet,
-  Sparkles,
-  Share2,
-  Copy,
-  Check,
-  TrendingUp,
-  UserPlus,
-  GitFork,
-  ListFilter,
-  Calculator,
-  ShieldCheck,
-  Zap
+  Sparkles, 
+  Copy, 
+  Check, 
+  GitFork, 
+  ListFilter, 
+  Calculator 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { supabase, getTeamTree, getLiveReferralUrl } from '../lib/supabase';
+import { supabase, getTeamTree, getNodeDownlines, getLiveReferralUrl } from '../lib/supabase';
 import { showToast } from '../components/Toast';
-import { InteractiveMatrixTree } from '../components/InteractiveMatrixTree';
+import { InteractiveMatrixTree, MatrixNodeData } from '../components/InteractiveMatrixTree';
 import { SmartMatrixSimulator } from '../components/SmartMatrixSimulator';
 
 export const TeamGenealogy: React.FC = () => {
   const { user, packagePrice } = useAuth();
-  const unitPrice = packagePrice;
-  const [team, setTeam] = useState<any[]>([]);
+  const unitPrice = packagePrice || 5000;
+  const [team, setTeam] = useState<MatrixNodeData[]>([]);
   const [settledTransactions, setSettledTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'TREE' | 'LIST' | 'SIMULATOR'>('TREE');
@@ -51,7 +45,7 @@ export const TeamGenealogy: React.FC = () => {
         getTeamTree(user.id),
         supabase
           .from('transactions')
-          .select('buyer_user_id, beneficiary_user_id, sale_number, is_passup, transaction_type, amount, payment_status, utr_number, created_at')
+          .select('buyer_user_id, beneficiary_user_id, sponsor_id, sale_number, is_passup, transaction_type, amount, payment_status, utr_number, created_at')
           .eq('payment_status', 'SUCCESS')
           .or(`beneficiary_user_id.eq.${user.id},buyer_user_id.eq.${user.id},sponsor_id.eq.${user.id}`)
       ]);
@@ -59,7 +53,7 @@ export const TeamGenealogy: React.FC = () => {
       setTeam(treeData || []);
       setSettledTransactions(txData || []);
     } catch (err) {
-      console.error('Data error:', err);
+      console.error('Data error in TeamGenealogy:', err);
     } finally {
       setLoading(false);
     }
@@ -69,51 +63,66 @@ export const TeamGenealogy: React.FC = () => {
     fetchLiveTeam();
   }, [user?.id]);
 
-  // 2. Smart Calculation: Har member ki kahani clear karein
+  // 2. Smart Calculation: Bind real transactions & ledger attribution
   const smartMembers = useMemo(() => {
     return team.map((member) => {
-      // Find real transaction
+      // Find real transaction for this direct member
       const myTx = settledTransactions.find(t => t.buyer_user_id === member.id);
       
-      const didIPayReceive = Boolean(myTx && myTx.beneficiary_user_id === user?.id);
-      const moneyReceived = didIPayReceive ? Number(myTx?.amount || 0) : 0;
-      const isPassedUp = Boolean(myTx && myTx.is_passup && myTx.beneficiary_user_id !== user?.id);
+      const didIPayReceive = Boolean(
+        (myTx && myTx.beneficiary_user_id === user?.id) ||
+        (member.flowType === 'DIRECT_KEEP' && member.moneyReceived && member.moneyReceived > 0)
+      );
+      const moneyReceived = didIPayReceive 
+        ? Number(myTx?.amount || member.moneyReceived || unitPrice) 
+        : 0;
+      const isPassedUp = Boolean(
+        member.is_passup ||
+        member.flowType === 'PASS_UP' ||
+        (myTx && myTx.is_passup && myTx.beneficiary_user_id !== user?.id)
+      );
 
       // Downlines ki kamai jo mujhe aayi
       const downlines = (member.children || []).map((child: any) => {
         const childTx = settledTransactions.find(t => t.buyer_user_id === child.id);
-        const didChildPayMe = Boolean(childTx && childTx.beneficiary_user_id === user?.id);
-        const childMoney = didChildPayMe ? Number(childTx?.amount || 0) : 0;
+        const didChildPayMe = Boolean(
+          child.isChildPassupToYou ||
+          (childTx && childTx.beneficiary_user_id === user?.id)
+        );
+        const childMoney = didChildPayMe ? Number(childTx?.amount || child.childMoney || unitPrice) : 0;
 
         return {
           ...child,
           didChildPayMe,
           childMoney,
-          utr: childTx?.utr_number || null,
-          saleNum: childTx?.sale_number || 0
+          utr: childTx?.utr_number || child.utr || null,
+          saleNum: childTx?.sale_number ?? child.saleNum ?? child.sale_number ?? 0
         };
       });
 
       // Total passup income from this specific member's branch
-      const totalBranchPassiveIncome = downlines.reduce((acc, c) => acc + c.childMoney, 0);
+      const totalBranchPassiveIncome = downlines.reduce((acc, c) => acc + (c.childMoney || 0), 0);
 
       return {
         ...member,
         didIPayReceive,
         moneyReceived,
         isPassedUp,
-        saleNum: myTx?.sale_number || 0,
-        utr: myTx?.utr_number || null,
+        is_passup: isPassedUp,
+        flowType: isPassedUp ? ('PASS_UP' as const) : ('DIRECT_KEEP' as const),
+        saleNum: myTx?.sale_number ?? member.saleNum ?? member.sale_number ?? 0,
+        utr: myTx?.utr_number || member.utr || null,
         downlines,
         totalBranchPassiveIncome
       };
     });
-  }, [team, settledTransactions, user?.id]);
+  }, [team, settledTransactions, user?.id, unitPrice]);
 
   // 3. Search & Filter
   const filteredList = useMemo(() => {
     return smartMembers.filter((m) => {
       const matchSearch = 
+        !searchQuery.trim() ||
         m.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         m.referral_code?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         m.email?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -128,20 +137,18 @@ export const TeamGenealogy: React.FC = () => {
   }, [smartMembers, searchQuery, activeFilter]);
 
   // Totals for top cards
-  const directEarnings = smartMembers.reduce((sum, m) => sum + m.moneyReceived, 0);
-  const teamPassiveEarnings = smartMembers.reduce((sum, m) => sum + m.totalBranchPassiveIncome, 0);
+  const directEarnings = smartMembers.reduce((sum, m) => sum + (m.moneyReceived || 0), 0);
+  const teamPassiveEarnings = smartMembers.reduce((sum, m) => sum + (m.totalBranchPassiveIncome || 0), 0);
   
-  // 1. Asli total seedha user profile / direct transactions sum se lein:
+  // Real total from user profile or sum
   const grandTotal = Number(user?.total_income || (directEarnings + teamPassiveEarnings));
-
-  // 2. Agar koi deep pass-up hai jo Level 2 se neeche se aaya hai, use bhi reconcile karein:
   const deepPassups = Math.max(0, grandTotal - (directEarnings + teamPassiveEarnings));
 
   const handleCopyLink = () => {
     if (liveReferralUrl) {
       navigator.clipboard.writeText(liveReferralUrl);
       setCopiedLink(true);
-      showToast('success', 'Link Copied', 'Referral link copy ho gaya!');
+      showToast('success', 'Link Copied', 'Referral link copied successfully!');
       setTimeout(() => setCopiedLink(false), 2000);
     }
   };
@@ -149,7 +156,7 @@ export const TeamGenealogy: React.FC = () => {
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-6">
       
-      {/* 1. TOP CASH SUMMARY (Ekdum seedha hisaab) */}
+      {/* 1. TOP CASH SUMMARY */}
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-[#0e1626] via-[#090d16] to-[#05070c] border border-amber-500/30 shadow-2xl relative overflow-hidden">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -184,7 +191,7 @@ export const TeamGenealogy: React.FC = () => {
           </div>
         </div>
 
-        {/* 2 Quick Mini Stats */}
+        {/* 3 Quick Mini Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-6 pt-5 border-t border-slate-800">
           <div className="bg-[#0c121e]/80 p-3 rounded-2xl border border-slate-800/80">
             <span className="text-[11px] text-slate-400 block">Direct Logo Se:</span>
@@ -268,6 +275,7 @@ export const TeamGenealogy: React.FC = () => {
             }}
             teamData={smartMembers}
             liveReferralUrl={liveReferralUrl}
+            onFetchSubTree={getNodeDownlines}
           />
         </div>
       )}
@@ -389,7 +397,7 @@ export const TeamGenealogy: React.FC = () => {
                                 <span>Upline Ko Gaya</span>
                               </span>
                               <span className="block text-[10px] text-slate-400 mt-0.5">
-                                Sale #{person.saleNum} Pass-Up Rule
+                                Sale #{person.saleNum || 'Pass-Up'} Pass-Up Rule
                               </span>
                             </div>
                           ) : (
@@ -455,19 +463,14 @@ export const TeamGenealogy: React.FC = () => {
                                   <p className="text-[10px] text-slate-400">#{child.referral_code} • {child.email}</p>
                                 </div>
                               </div>
-
-                              <div className="flex items-center justify-between sm:justify-end gap-3">
+                              <div className="text-right">
                                 {child.didChildPayMe ? (
-                                  <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-500/30">
-                                    🎁 Pass-up Aapko Aaya (+₹{child.childMoney.toLocaleString('en-IN')})
-                                  </span>
-                                ) : child.is_active ? (
-                                  <span className="text-[11px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                                    {person.full_name} ko mila (Sale Kept)
+                                  <span className="font-bold text-emerald-400">
+                                    +₹{child.childMoney.toLocaleString('en-IN')} (Pass-Up Received)
                                   </span>
                                 ) : (
-                                  <span className="text-[11px] text-amber-500/80 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/20">
-                                    Payment Pending
+                                  <span className="text-slate-500">
+                                    Kept by {person.full_name?.split(' ')[0]}
                                   </span>
                                 )}
                               </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   Users, 
   ArrowUpRight, 
@@ -11,17 +11,11 @@ import {
   Info,
   ChevronRight,
   Search,
-  Maximize2,
-  Minimize2,
   ChevronDown,
-  Layers,
-  Phone,
   Copy,
   Check,
-  ExternalLink,
-  ShieldCheck,
-  Zap,
-  ArrowRight
+  ArrowRight,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -39,6 +33,8 @@ export interface MatrixNodeData {
   didIPayReceive?: boolean;
   moneyReceived?: number;
   isPassedUp?: boolean;
+  is_passup?: boolean;
+  flowType?: 'PASS_UP' | 'DIRECT_KEEP';
   utr?: string | null;
   saleNum?: number;
   totalBranchPassiveIncome?: number;
@@ -58,22 +54,26 @@ interface InteractiveMatrixTreeProps {
   };
   teamData: MatrixNodeData[];
   liveReferralUrl: string;
+  onFetchSubTree?: (nodeId: string) => Promise<MatrixNodeData[]>;
 }
 
 export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
   currentUser,
   teamData,
-  liveReferralUrl
+  liveReferralUrl,
+  onFetchSubTree
 }) => {
   const { packagePrice } = useAuth();
-  const unitPrice = packagePrice;
-
+  const unitPrice = packagePrice || 5000;
+  
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  
-  // Breadcrumb Drill-Down History
+  const [dynamicChildrenCache, setDynamicChildrenCache] = useState<Record<string, MatrixNodeData[]>>({});
+  const [drillLoading, setDrillLoading] = useState(false);
+
+  // Breadcrumb Trail
   const [drillDownPath, setDrillDownPath] = useState<Array<{ id: string; name: string; code: string }>>([
     { id: currentUser.id || 'root', name: currentUser.full_name || 'My Account', code: currentUser.referral_code || '' }
   ]);
@@ -89,14 +89,13 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [copiedCode, setCopiedCode] = useState(false);
-
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  // Active root based on drill-down path
+  // Active root resolution
   const currentRootId = drillDownPath[drillDownPath.length - 1]?.id;
   const isAtOriginalRoot = drillDownPath.length === 1;
 
-  // Find active root node data
+  // Find active root node and its children
   const currentRootNode = useMemo(() => {
     if (isAtOriginalRoot) {
       return {
@@ -104,7 +103,18 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
         children: teamData
       };
     }
-    // Search in teamData
+
+    // Check dynamic fetch cache first
+    if (dynamicChildrenCache[currentRootId]) {
+      return {
+        id: currentRootId,
+        full_name: drillDownPath[drillDownPath.length - 1]?.name || 'Member',
+        referral_code: drillDownPath[drillDownPath.length - 1]?.code || '',
+        children: dynamicChildrenCache[currentRootId]
+      };
+    }
+
+    // Search in existing teamData tree recursively
     const findNode = (nodes: MatrixNodeData[], targetId: string): MatrixNodeData | null => {
       for (const n of nodes) {
         if (n.id === targetId) return n;
@@ -115,23 +125,25 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
       }
       return null;
     };
+
     const target = findNode(teamData, currentRootId);
-    return target || { ...currentUser, children: teamData };
-  }, [currentRootId, isAtOriginalRoot, currentUser, teamData]);
+    return target || { ...currentUser, children: [] };
+  }, [currentRootId, isAtOriginalRoot, currentUser, teamData, dynamicChildrenCache, drillDownPath]);
 
   const activeChildren = useMemo(() => {
     return (currentRootNode?.children || []) as MatrixNodeData[];
   }, [currentRootNode]);
 
-  // 1st & 3rd Pass-Up Rule Calculation for active root's children
+  // Strict Data Ledger Verification (NO Array Indexing)
   const enrichedDirects = useMemo(() => {
-    return activeChildren.map((node, index) => {
-      const saleNumber = index + 1;
-      // Sale #1 and #3 are PASS-UP
-      const isPassUp = saleNumber === 1 || saleNumber === 3;
+    return activeChildren.map((node) => {
+      // Prioritize database verified attributes
+      const realSaleNum = node.saleNum ?? (node as any).sale_number ?? null;
+      const isPassUp = node.isPassedUp ?? node.is_passup ?? (realSaleNum === 1 || realSaleNum === 3);
+      
       return {
         ...node,
-        saleNumber,
+        saleNumber: realSaleNum,
         flowType: isPassUp ? ('PASS_UP' as const) : ('DIRECT_KEEP' as const)
       };
     });
@@ -144,20 +156,22 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
         item.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.referral_code?.toLowerCase().includes(searchQuery.toLowerCase());
+
       const matchesFilter =
         filterType === 'ALL' ||
         (filterType === 'ACTIVE' && item.is_active) ||
         (filterType === 'PASSUP' && item.flowType === 'PASS_UP') ||
         (filterType === 'KEEP' && item.flowType === 'DIRECT_KEEP');
+
       return matchesSearch && matchesFilter;
     });
   }, [enrichedDirects, searchQuery, filterType]);
 
-  // Next Direct Sale Forecast
+  // Next direct sale rule forecast
   const nextSaleNumber = (teamData?.length || 0) + 1;
   const isNextSalePassUp = nextSaleNumber === 1 || nextSaleNumber === 3;
 
-  // Zoom and Pan Handlers
+  // Zoom / Pan handlers
   const handleZoom = (delta: number) => {
     setZoomLevel((prev) => Math.min(Math.max(0.5, Number((prev + delta).toFixed(1))), 1.8));
   };
@@ -168,7 +182,6 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Only drag if left click and not on a button or card click
     if (e.button === 0) {
       setIsDragging(true);
       setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
@@ -203,8 +216,20 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
     setExpandedNodes({});
   };
 
-  // Drill down as root
-  const handleDrillDown = (node: MatrixNodeData) => {
+  // Dynamic on-demand drill down
+  const handleDrillDown = async (node: MatrixNodeData) => {
+    if (onFetchSubTree && !dynamicChildrenCache[node.id] && (!node.children || node.children.length === 0)) {
+      setDrillLoading(true);
+      try {
+        const fetched = await onFetchSubTree(node.id);
+        setDynamicChildrenCache(prev => ({ ...prev, [node.id]: fetched }));
+      } catch (err) {
+        console.error('Failed to load sub-tree:', err);
+      } finally {
+        setDrillLoading(false);
+      }
+    }
+
     setDrillDownPath(prev => [
       ...prev,
       { id: node.id, name: node.full_name, code: node.referral_code }
@@ -242,43 +267,41 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
                   ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40' 
                   : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40'
               }`}>
-                Sale #{nextSaleNumber} • {isNextSalePassUp ? 'Pass-Up to Sponsor' : `Direct Kept (+₹${unitPrice.toLocaleString('en-IN')})`}
+                Sale #{nextSaleNumber} • {isNextSalePassUp ? 'Pass-Up to Sponsor' : `Direct Kept (+ ₹${unitPrice.toLocaleString('en-IN')})`}
               </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
               {isNextSalePassUp 
                 ? 'Your next direct sale will pass to your qualifying sponsor (Qualifying Pass-Up Rule).'
-                : `Your next direct sale will deposit ₹${unitPrice.toLocaleString('en-IN')} instantly to your bank account via UPI!`}
+                : `Your next direct sale will deposit ₹${unitPrice.toLocaleString('en-IN')} directly to your bank account via UPI!`}
             </p>
           </div>
         </div>
-
         <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
-          <span className="text-[11px] font-mono text-slate-400">Total Directs: <strong className="text-white">{teamData.length}</strong></span>
+          <span className="text-[11px] font-mono text-slate-400">
+            Directs in Root: <strong className="text-white">{teamData.length}</strong>
+          </span>
         </div>
       </div>
 
       {/* Visual Canvas Toolbar */}
       <div className="p-3.5 rounded-2xl bg-[#0c1017] border border-[#1c2436] flex flex-wrap items-center justify-between gap-3 text-xs">
-        {/* Left: Filter Buttons & Search */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Search Box */}
           <div className="relative w-44 sm:w-56">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search in tree..."
+              placeholder="Search member..."
               className="w-full pl-8 pr-3 py-1.5 bg-[#07090e] border border-[#1c2436] rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60 font-mono"
             />
           </div>
-
           <div className="flex items-center gap-1 overflow-x-auto">
             {[
               { id: 'ALL', label: 'All' },
               { id: 'ACTIVE', label: 'Active' },
-              { id: 'KEEP', label: 'Direct Kept (₹5k)' },
+              { id: 'KEEP', label: 'Direct Kept' },
               { id: 'PASSUP', label: 'Pass-Up' }
             ].map((tab) => (
               <button
@@ -296,28 +319,23 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
           </div>
         </div>
 
-        {/* Right: Expand/Collapse & Zoom Controls */}
         <div className="flex items-center gap-2">
-          {/* Expand/Collapse branch toggles */}
           <div className="flex items-center bg-[#111722] border border-[#212c40] rounded-lg p-0.5">
             <button
               onClick={expandAll}
               className="px-2 py-1 text-[11px] font-mono text-slate-300 hover:text-white transition-colors cursor-pointer"
-              title="Expand All Branches"
             >
-              Expand All
+              Expand
             </button>
             <span className="text-slate-600">|</span>
             <button
               onClick={collapseAll}
               className="px-2 py-1 text-[11px] font-mono text-slate-300 hover:text-white transition-colors cursor-pointer"
-              title="Collapse All Branches"
             >
               Collapse
             </button>
           </div>
 
-          {/* Zoom controls */}
           <div className="flex items-center bg-[#111722] border border-[#212c40] rounded-lg p-0.5">
             <button
               onClick={() => handleZoom(-0.1)}
@@ -339,7 +357,7 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
             <button
               onClick={handleResetView}
               className="p-1.5 text-slate-400 hover:text-white border-l border-[#212c40] transition-colors cursor-pointer"
-              title="Center & Reset View"
+              title="Center"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -347,7 +365,7 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
         </div>
       </div>
 
-      {/* Interactive Node Canvas Container */}
+      {/* Tree Canvas */}
       <div 
         ref={canvasRef}
         onMouseDown={handleMouseDown}
@@ -358,11 +376,10 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
           isDragging ? 'cursor-grabbing' : 'cursor-grab'
         }`}
       >
-        {/* Top Breadcrumbs & Legend Bar */}
+        {/* Breadcrumb Path */}
         <div className="relative z-10 p-3.5 sm:p-4 border-b border-[#1c2436] bg-[#0c1017]/95 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-          {/* Drill-down Breadcrumb */}
           <div className="flex items-center gap-1.5 overflow-x-auto text-slate-300">
-            <span className="text-slate-400 mr-1">View:</span>
+            <span className="text-slate-400 mr-1">Path:</span>
             {drillDownPath.map((item, idx) => {
               const isLast = idx === drillDownPath.length - 1;
               return (
@@ -384,257 +401,250 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
             })}
           </div>
 
-          {/* Color Legend */}
           <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-300">
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-              <span>Direct Keep ({unitPrice > 0 ? `₹${unitPrice.toLocaleString('en-IN')}` : '100%'})</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+              <span>Direct Kept</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400" />
               <span>Pass-Up (To Upline)</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(243,195,104,0.8)]" />
-              <span>Downline Inflow</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span>Pass-Up Received</span>
             </div>
           </div>
         </div>
 
-        {/* Tree Render Viewport (Pannable & Zoomable) */}
+        {/* Viewport */}
         <div
           className="relative z-0 p-8 sm:p-12 overflow-visible flex flex-col items-center transition-transform duration-75 origin-top min-w-full"
           style={{ 
             transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})` 
           }}
         >
-          {/* ACTIVE ROOT NODE */}
-          <div
-            onClick={() => setSelectedNode({ node: currentRootNode as any, role: 'ROOT' })}
-            className="group relative cursor-pointer"
-          >
-            <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-amber-700 rounded-2xl blur-sm opacity-50 group-hover:opacity-100 transition duration-300" />
-            <div className="relative w-72 sm:w-80 rounded-2xl bg-[#0c1017] border-2 border-amber-500/80 p-4 shadow-xl hover:border-amber-400 transition-all">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl gold-btn-gradient text-slate-950 font-black text-lg flex items-center justify-center shadow-lg">
-                    {currentRootNode.full_name?.charAt(0)?.toUpperCase() || 'Y'}
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-bold text-white tracking-tight truncate">{currentRootNode.full_name || 'Your Account'}</span>
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-500/40 shrink-0">
-                        ROOT
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 font-mono mt-0.5">
-                      #{currentRootNode.referral_code || 'CODE'}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/40">
-                    <CheckCircle2 className="w-3 h-3" />
-                    <span>Active</span>
-                  </span>
-                  <p className="text-[10px] text-slate-400 font-mono mt-1">
-                    {activeChildren.length} Directs
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Connecting Vertical Stem */}
-            {filteredDirects.length > 0 && (
-              <div className="w-0.5 h-8 bg-gradient-to-b from-amber-500 to-slate-700 mx-auto" />
-            )}
-          </div>
-
-          {/* LEVEL 1 DIRECT NODES CONTAINER */}
-          {filteredDirects.length === 0 ? (
-            <div className="mt-8 text-center p-8 border border-dashed border-[#1c2436] rounded-2xl max-w-md bg-[#0c1017]/60">
-              <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-slate-300">No Direct Team IDs in View</p>
-              <p className="text-xs text-slate-500 mt-1">Share your referral link to build direct IDs!</p>
+          {drillLoading ? (
+            <div className="py-20 flex flex-col items-center gap-2">
+              <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+              <span className="text-xs font-mono text-slate-400">Loading sub-tree records...</span>
             </div>
           ) : (
-            <div className="w-full relative mt-1">
-              {/* Horizontal Bar Connector */}
-              <div className="h-0.5 bg-slate-700 mx-auto w-[85%] relative">
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-2.5 py-0.5 bg-[#07090e] border border-[#1c2436] text-[10px] font-mono text-slate-400 rounded-full whitespace-nowrap">
-                  Direct Referrals ({filteredDirects.length})
+            <>
+              {/* CURRENT ROOT NODE */}
+              <div
+                onClick={() => setSelectedNode({ node: currentRootNode as any, role: 'ROOT' })}
+                className="group relative cursor-pointer"
+              >
+                <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-amber-700 rounded-2xl blur-sm opacity-50 group-hover:opacity-100 transition duration-300" />
+                <div className="relative w-72 sm:w-80 rounded-2xl bg-[#0c1017] border-2 border-amber-500/80 p-4 shadow-xl hover:border-amber-400 transition-all">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl gold-btn-gradient text-slate-950 font-black text-lg flex items-center justify-center shadow-lg">
+                        {currentRootNode.full_name?.charAt(0)?.toUpperCase() || 'Y'}
+                      </div>
+                      <div className="overflow-hidden">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-white tracking-tight truncate">{currentRootNode.full_name || 'Account'}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-500/40 shrink-0">
+                            ROOT
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-400 font-mono mt-0.5">
+                          #{currentRootNode.referral_code || 'CODE'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/40">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Active</span>
+                      </span>
+                      <p className="text-[10px] text-slate-400 font-mono mt-1">
+                        {activeChildren.length} Directs
+                      </p>
+                    </div>
+                  </div>
                 </div>
+                {filteredDirects.length > 0 && (
+                  <div className="w-0.5 h-8 bg-gradient-to-b from-amber-500 to-slate-700 mx-auto" />
+                )}
               </div>
 
-              {/* Direct Nodes Cards Row */}
-              <div className="pt-6 flex flex-wrap justify-center gap-6 sm:gap-8 items-start">
-                {filteredDirects.map((member) => {
-                  const isPassUp = member.flowType === 'PASS_UP';
-                  const childrenCount = member.children?.length || 0;
-                  const isExpanded = expandedNodes[member.id];
+              {/* LEVEL 1 CHILDREN */}
+              {filteredDirects.length === 0 ? (
+                <div className="mt-8 text-center p-8 border border-dashed border-[#1c2436] rounded-2xl max-w-md bg-[#0c1017]/60">
+                  <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-slate-300">No Direct Team IDs in View</p>
+                  <p className="text-xs text-slate-500 mt-1">Share your referral link to build direct IDs!</p>
+                </div>
+              ) : (
+                <div className="w-full relative mt-1">
+                  <div className="h-0.5 bg-slate-700 mx-auto w-[85%] relative">
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-2.5 py-0.5 bg-[#07090e] border border-[#1c2436] text-[10px] font-mono text-slate-400 rounded-full whitespace-nowrap">
+                      Direct Referrals ({filteredDirects.length})
+                    </div>
+                  </div>
 
-                  return (
-                    <div key={member.id} className="flex flex-col items-center">
-                      {/* Vertical line connecting to horizontal bar */}
-                      <div className={`w-0.5 h-6 ${isPassUp ? 'bg-cyan-500/60' : 'bg-emerald-500/60'}`} />
-                      
-                      {/* Node Card */}
-                      <div
-                        onClick={() => setSelectedNode({
-                          node: member,
-                          role: isPassUp ? 'PASS_UP' : 'DIRECT_KEEP',
-                          saleNumber: member.saleNumber,
-                          parentName: currentRootNode.full_name
-                        })}
-                        className={`w-64 sm:w-72 rounded-2xl p-4 transition-all duration-200 cursor-pointer text-left relative overflow-hidden group shadow-lg ${
-                          isPassUp
-                            ? 'bg-[#0c1017] border-2 border-cyan-500/40 hover:border-cyan-400 hover:shadow-cyan-950/50'
-                            : 'bg-[#0c1017] border-2 border-emerald-500/40 hover:border-emerald-400 hover:shadow-emerald-950/50'
-                        }`}
-                      >
-                        {/* Top Sale Badge */}
-                        <div className="flex items-center justify-between gap-2 mb-2.5">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1 ${
-                            isPassUp
-                              ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/30'
-                              : 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
-                          }`}>
-                            {isPassUp ? (
-                              <>
-                                <ArrowUpRight className="w-3 h-3 text-cyan-400" />
-                                <span>Sale #{member.saleNumber}: 1st/3rd Pass-Up</span>
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                <span>Sale #{member.saleNumber}: Direct Keep</span>
-                              </>
-                            )}
-                          </span>
-                          <span className={`w-2 h-2 rounded-full ${
-                            member.is_active ? 'bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]' : 'bg-slate-600'
-                          }`} />
-                        </div>
+                  <div className="pt-6 flex flex-wrap justify-center gap-6 sm:gap-8 items-start">
+                    {filteredDirects.map((member) => {
+                      const isPassUp = member.flowType === 'PASS_UP';
+                      const childrenCount = member.children?.length || member.downlines?.length || 0;
+                      const isExpanded = expandedNodes[member.id];
 
-                        {/* Member Identity */}
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
-                            isPassUp
-                              ? 'bg-cyan-900/60 text-cyan-200 border border-cyan-500/30'
-                              : 'bg-emerald-900/60 text-emerald-200 border border-emerald-500/30'
-                          }`}>
-                            {member.full_name?.charAt(0)?.toUpperCase() || 'M'}
-                          </div>
-                          <div className="overflow-hidden min-w-0">
-                            <p className="text-xs font-bold text-white truncate">{member.full_name}</p>
-                            <p className="text-[10px] text-slate-400 font-mono truncate">
-                              #{member.referral_code} • {member.email}
-                            </p>
-                          </div>
-                        </div>
+                      return (
+                        <div key={member.id} className="flex flex-col items-center">
+                          <div className={`w-0.5 h-6 ${isPassUp ? 'bg-cyan-500/60' : 'bg-emerald-500/60'}`} />
 
-                        {/* Yield / Flow Line */}
-                        <div className="mt-3 pt-2.5 border-t border-[#1c2436] flex items-center justify-between text-[11px] font-mono">
-                          <span className="text-slate-400">Yield Allocation</span>
-                          <span className={`font-bold tabular-nums ${isPassUp ? 'text-cyan-400' : 'text-emerald-400'}`}>
-                            {isPassUp ? 'Passed to Upline' : `+₹${(member.moneyReceived || unitPrice).toLocaleString('en-IN')} Kept`}
-                          </span>
-                        </div>
-
-                        {/* Action buttons inside card */}
-                        <div className="mt-3 pt-2 border-t border-[#1c2436]/60 flex items-center justify-between gap-1">
-                          {/* Drill-down button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDrillDown(member);
-                            }}
-                            className="px-2 py-1 rounded-lg bg-[#111722] hover:bg-[#1a2333] border border-[#212c40] text-[10px] font-mono text-amber-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
-                            title="Drill down to explore this member's team"
+                          <div
+                            onClick={() => setSelectedNode({
+                              node: member,
+                              role: isPassUp ? 'PASS_UP' : 'DIRECT_KEEP',
+                              saleNumber: member.saleNumber || undefined,
+                              parentName: currentRootNode.full_name
+                            })}
+                            className={`w-64 sm:w-72 rounded-2xl p-4 transition-all duration-200 cursor-pointer text-left relative overflow-hidden group shadow-lg ${
+                              isPassUp
+                                ? 'bg-[#0c1017] border-2 border-cyan-500/40 hover:border-cyan-400'
+                                : 'bg-[#0c1017] border-2 border-emerald-500/40 hover:border-emerald-400'
+                            }`}
                           >
-                            <span>Drill Down</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
+                            <div className="flex items-center justify-between gap-2 mb-2.5">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold flex items-center gap-1 ${
+                                isPassUp
+                                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/30'
+                                  : 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                              }`}>
+                                {isPassUp ? (
+                                  <>
+                                    <ArrowUpRight className="w-3 h-3 text-cyan-400" />
+                                    <span>Sale #{member.saleNumber ?? 'Pass-Up'}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                    <span>Sale #{member.saleNumber ?? 'Kept'}</span>
+                                  </>
+                                )}
+                              </span>
+                              <span className={`w-2 h-2 rounded-full ${
+                                member.is_active ? 'bg-emerald-400' : 'bg-slate-600'
+                              }`} />
+                            </div>
 
-                          {/* Children toggle if exists */}
-                          {childrenCount > 0 && (
-                            <button
-                              onClick={(e) => toggleNodeExpand(member.id, e)}
-                              className="px-2 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/30 text-[10px] font-mono text-amber-300 flex items-center gap-1 transition-colors cursor-pointer"
-                            >
-                              <span>{childrenCount} Downlines</span>
-                              {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                            </button>
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 ${
+                                isPassUp
+                                  ? 'bg-cyan-900/60 text-cyan-200 border border-cyan-500/30'
+                                  : 'bg-emerald-900/60 text-emerald-200 border border-emerald-500/30'
+                              }`}>
+                                {member.full_name?.charAt(0)?.toUpperCase() || 'M'}
+                              </div>
+                              <div className="overflow-hidden min-w-0">
+                                <p className="text-xs font-bold text-white truncate">{member.full_name}</p>
+                                <p className="text-[10px] text-slate-400 font-mono truncate">
+                                  #{member.referral_code}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="mt-3 pt-2.5 border-t border-[#1c2436] flex items-center justify-between text-[11px] font-mono">
+                              <span className="text-slate-400">Yield</span>
+                              <span className={`font-bold tabular-nums ${isPassUp ? 'text-cyan-400' : 'text-emerald-400'}`}>
+                                {isPassUp ? 'Passed to Upline' : `+ ₹${(member.moneyReceived || unitPrice).toLocaleString('en-IN')}`}
+                              </span>
+                            </div>
+
+                            <div className="mt-3 pt-2 border-t border-[#1c2436]/60 flex items-center justify-between gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDrillDown(member);
+                                }}
+                                className="px-2 py-1 rounded-lg bg-[#111722] hover:bg-[#1a2333] border border-[#212c40] text-[10px] font-mono text-amber-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <span>Drill Down</span>
+                                <ArrowRight className="w-3 h-3" />
+                              </button>
+
+                              {childrenCount > 0 && (
+                                <button
+                                  onClick={(e) => toggleNodeExpand(member.id, e)}
+                                  className="px-2 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/30 text-[10px] font-mono text-amber-300 flex items-center gap-1 transition-colors cursor-pointer"
+                                >
+                                  <span>{childrenCount} Downlines</span>
+                                  {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* SUB-BRANCH CONTAINER */}
+                          {childrenCount > 0 && isExpanded && (
+                            <div className="flex flex-col items-center mt-2 animate-in fade-in slide-in-from-top-2">
+                              <div className="w-0.5 h-4 bg-amber-500/40" />
+                              <div className="p-3 rounded-2xl bg-[#0c1017]/95 border border-amber-500/30 space-y-2 w-64 sm:w-72 shadow-xl">
+                                <div className="text-[10px] font-mono font-bold text-amber-400 flex items-center justify-between">
+                                  <span className="flex items-center gap-1">
+                                    <Sparkles className="w-3 h-3" />
+                                    <span>Branch Inflow</span>
+                                  </span>
+                                  <span className="text-[9px] text-slate-400">Verified Ledger</span>
+                                </div>
+                                <div className="space-y-1.5">
+                                  {member.children?.map((child: any) => {
+                                    const isChildPassupToYou = Boolean(child.didChildPayMe);
+                                    return (
+                                      <div
+                                        key={child.id}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedNode({
+                                            node: child,
+                                            role: 'LEVEL_2',
+                                            saleNumber: child.saleNum,
+                                            parentName: member.full_name
+                                          });
+                                        }}
+                                        className="p-2 rounded-xl bg-[#07090e] border border-[#1c2436] hover:border-amber-500/40 text-[10px] font-mono flex items-center justify-between cursor-pointer transition-all hover:bg-[#111722]"
+                                      >
+                                        <div className="overflow-hidden pr-2">
+                                          <p className="text-slate-200 font-semibold truncate">{child.full_name}</p>
+                                          <p className="text-[9px] text-slate-400">#{child.referral_code}</p>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                          <span className={`font-bold block ${isChildPassupToYou ? 'text-amber-400' : 'text-slate-400'}`}>
+                                            {isChildPassupToYou ? `+ ₹${(child.childMoney || unitPrice).toLocaleString('en-IN')} to You` : 'Kept by L1'}
+                                          </span>
+                                          <span className="text-[8px] text-slate-400">Sale #{child.saleNum || '-'}</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
                           )}
                         </div>
-                      </div>
-
-                      {/* LEVEL 2 CHILDREN SUB-TREE CONTAINER */}
-                      {childrenCount > 0 && isExpanded && (
-                        <div className="flex flex-col items-center mt-2 animate-in fade-in slide-in-from-top-2">
-                          <div className="w-0.5 h-4 bg-amber-500/40" />
-                          <div className="p-3 rounded-2xl bg-[#0c1017]/95 border border-amber-500/30 space-y-2 w-64 sm:w-72 shadow-xl">
-                            <div className="text-[10px] font-mono font-bold text-amber-400 flex items-center justify-between">
-                              <span className="flex items-center gap-1">
-                                <Sparkles className="w-3 h-3" />
-                                <span>Level 2 Pass-Up Stream</span>
-                              </span>
-                              <span className="text-[9px] text-slate-400">1st & 3rd to You</span>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              {member.children?.map((child, cIdx) => {
-                                // Child Sale #1 (cIdx 0) and Sale #3 (cIdx 2) pass up to YOU only if parent is DIRECT_KEEP!
-                                const isChildPassupToYou = member.flowType === 'DIRECT_KEEP' && (cIdx === 0 || cIdx === 2);
-                                return (
-                                  <div
-                                    key={child.id}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedNode({
-                                        node: child,
-                                        role: 'LEVEL_2',
-                                        saleNumber: cIdx + 1,
-                                        parentName: member.full_name
-                                      });
-                                    }}
-                                    className="p-2 rounded-xl bg-[#07090e] border border-[#1c2436] hover:border-amber-500/40 text-[10px] font-mono flex items-center justify-between cursor-pointer transition-all hover:bg-[#111722]"
-                                  >
-                                    <div className="overflow-hidden pr-2">
-                                      <p className="text-slate-200 font-semibold truncate">{child.full_name}</p>
-                                      <p className="text-[9px] text-slate-400">#{child.referral_code}</p>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                      <span className={`font-bold block ${isChildPassupToYou ? 'text-amber-400' : 'text-slate-400'}`}>
-                                        {isChildPassupToYou ? `➡️ +₹${((child as any).childMoney || unitPrice).toLocaleString('en-IN')} to You` : 'Kept by L1'}
-                                      </span>
-                                      <span className="text-[8px] text-slate-400">Sale #{cIdx + 1}</span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Bottom Canvas Help & Navigation Info Bar */}
+        {/* Bottom Help */}
         <div className="relative z-10 p-3 bg-[#0c1017]/95 border-t border-[#1c2436] text-[11px] text-slate-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span>
-              <strong>Tree Canvas Guide:</strong> Drag canvas to pan. Use Zoom (+/-) to fit. Click any ID to inspect or <strong>Drill Down</strong> to explore deep sub-trees.
+              <strong>Tree Guide:</strong> Drag canvas to pan. Click <strong>Drill Down</strong> to explore deep sub-trees with real database sync.
             </span>
           </div>
           <div className="text-amber-400/90 font-mono text-[10px] font-bold">
-            100% Peer-to-Peer 2-Up Matrix Architecture
+            100% Peer-to-Peer 2-Up Matrix
           </div>
         </div>
       </div>
@@ -650,7 +660,6 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
               <X className="w-4 h-4" />
             </button>
 
-            {/* Member Profile Banner */}
             <div className="flex items-center gap-3.5">
               <div className="w-12 h-12 rounded-2xl gold-btn-gradient text-slate-950 font-black text-lg flex items-center justify-center shadow-lg shrink-0">
                 {selectedNode.node.full_name?.charAt(0)?.toUpperCase() || 'M'}
@@ -668,12 +677,11 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
               </div>
             </div>
 
-            {/* Key Data Ledger Specs */}
             <div className="p-4 rounded-2xl bg-[#07090e] border border-[#1c2436] space-y-2.5 text-xs font-mono">
               <div className="flex items-center justify-between pb-2 border-b border-[#1c2436]">
-                <span className="text-slate-400">2-Up Matrix Position</span>
+                <span className="text-slate-400">Matrix Position</span>
                 <span className="text-white font-bold">
-                  {selectedNode.saleNumber ? `Direct Sale #${selectedNode.saleNumber}` : 'Root Account'}
+                  {selectedNode.saleNumber ? `Sale #${selectedNode.saleNumber}` : 'Root Account'}
                 </span>
               </div>
               <div className="flex items-center justify-between pb-2 border-b border-[#1c2436]">
@@ -688,19 +696,19 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
                   {selectedNode.role === 'PASS_UP' 
                     ? '1st & 3rd Pass-Up (Sent to Upline)' 
                     : selectedNode.role === 'DIRECT_KEEP' 
-                      ? `100% Direct Kept (+₹${((selectedNode.node as any).moneyReceived || unitPrice).toLocaleString('en-IN')} to You)` 
+                      ? `100% Direct Kept (+ ₹${((selectedNode.node as any).moneyReceived || unitPrice).toLocaleString('en-IN')})` 
                       : selectedNode.role === 'LEVEL_2'
-                        ? `Level 2 Pass-Up Stream (+₹${((selectedNode.node as any).childMoney || unitPrice).toLocaleString('en-IN')})`
-                        : 'Root ID Ledger'}
+                        ? `Branch Inflow (+ ₹${((selectedNode.node as any).childMoney || unitPrice).toLocaleString('en-IN')})`
+                        : 'Root ID'}
                 </span>
               </div>
               <div className="flex items-center justify-between pb-2 border-b border-[#1c2436]">
-                <span className="text-slate-400">Account Activation</span>
+                <span className="text-slate-400">Status</span>
                 <span className={selectedNode.node.is_active ? 'text-emerald-400 font-bold flex items-center gap-1' : 'text-amber-400'}>
                   {selectedNode.node.is_active ? (
                     <>
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Active Verified ID (₹{unitPrice.toLocaleString('en-IN')})</span>
+                      <span>Active Verified ID</span>
                     </>
                   ) : (
                     'Pending Activation'
@@ -713,32 +721,16 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
                   <span className="text-amber-400 font-bold">{(selectedNode.node as any).utr}</span>
                 </div>
               )}
-              {Boolean((selectedNode.node as any).totalBranchPassiveIncome) && (
-                <div className="flex items-center justify-between pb-2 border-b border-[#1c2436]">
-                  <span className="text-slate-400">Branch Pass-Up Generated</span>
-                  <span className="text-emerald-400 font-bold">
-                    +₹{Number((selectedNode.node as any).totalBranchPassiveIncome).toLocaleString('en-IN')}
-                  </span>
-                </div>
-              )}
-              {selectedNode.parentName && (
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-slate-400">Direct Sponsor</span>
-                  <span className="text-slate-200">{selectedNode.parentName}</span>
-                </div>
-              )}
             </div>
 
-            {/* Bottom Actions */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <button
                 onClick={() => handleCopyCode(selectedNode.node.referral_code || '')}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#111722] hover:bg-[#1a2333] border border-[#212c40] text-xs font-mono text-slate-300 hover:text-white transition-colors cursor-pointer"
               >
                 {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-amber-400" />}
-                <span>{copiedCode ? 'Copied Code' : 'Copy Referral Code'}</span>
+                <span>{copiedCode ? 'Copied' : 'Copy Code'}</span>
               </button>
-
               <div className="flex items-center gap-2">
                 {selectedNode.role !== 'ROOT' && (
                   <button

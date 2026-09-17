@@ -57,7 +57,7 @@ async function startServer() {
 
   const ZAP_API_URL = 'https://pay.zapupi.com/api/create-order';
 
-  // 1. Create ZapUPI Order (100% Dynamic - Zero Hardcoded Price)
+  // 1. Create ZapUPI Order (Dynamic Price & Key Allocation)
   app.post('/api/zapupi/create-order', async (req: Request, res: Response) => {
     try {
       let { 
@@ -66,7 +66,7 @@ async function startServer() {
         zap_key, 
         customer_mobile, 
         remark = 'MoneyOcean P2P Slot',
-        beneficiary_upi
+        beneficiary_upi 
       } = req.body;
 
       // 1. Strict Dynamic Amount from Database if not provided
@@ -103,7 +103,6 @@ async function startServer() {
 
       const formattedAmount = Number(amount).toFixed(2);
       const uniqueOrderId = order_id || `MO${Date.now()}${Math.floor(1000 + Math.random() * 9000)}`;
-
       const upiId = beneficiary_upi || '';
       const standardUpiIntent = upiId 
         ? `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent('MoneyOcean P2P')}&am=${formattedAmount}&tr=${encodeURIComponent(uniqueOrderId)}&cu=INR&tn=${encodeURIComponent(`Slot_${uniqueOrderId}`)}`
@@ -146,7 +145,6 @@ async function startServer() {
             payment_url: data.payment_url || ''
           });
         } else {
-          console.warn('[ZapUPI Gateway] Fallback UI mode:', data?.message);
           return res.json({
             status: 'success',
             success: true,
@@ -201,7 +199,6 @@ async function startServer() {
       if (existing) {
         return res.json({ success: true, message: 'Transaction record found', data: existing });
       }
-
       return res.json({ success: true });
     } catch (err: any) {
       return res.json({ success: false, error: err.message });
@@ -215,11 +212,9 @@ async function startServer() {
       if (!payId) {
         return res.status(400).json({ status: 'error', message: 'pay_id is required' });
       }
-
       const checkUrl = `https://pay.zapupi.com/pay/auto-check-${encodeURIComponent(payId)}`;
       const response = await fetch(checkUrl, { headers: { 'Cache-Control': 'no-cache' } });
       const text = await response.text();
-
       let parsed: any;
       try {
         parsed = JSON.parse(text);
@@ -238,11 +233,9 @@ async function startServer() {
       if (!payId || !utr) {
         return res.status(400).json({ status: 'error', message: 'pay_id and utr are required' });
       }
-
       const utrUrl = `https://pay.zapupi.com/pay/utr-check-${encodeURIComponent(payId)}-${encodeURIComponent(utr)}`;
       const response = await fetch(utrUrl, { headers: { 'Cache-Control': 'no-cache' } });
       const text = await response.text();
-
       let parsed: any;
       try {
         parsed = JSON.parse(text);
@@ -255,17 +248,15 @@ async function startServer() {
     }
   });
 
-  // 4. Secure ZapUPI Webhook Endpoint (Relay-Only to Edge Function / Worker)
+  // 4. Secure ZapUPI Webhook Endpoint (Relay-Safe Acknowledgment)
   app.post('/api/zapupi-webhook', async (req: Request, res: Response) => {
     try {
       const payload = req.body || {};
       const order_id = payload.order_id || payload.orderId || payload.order_no || payload.tr;
-
       if (!order_id) {
         return res.status(400).json({ received: false, error: 'Missing order_id' });
       }
-
-      // Direct RPC yahan se execute NA karein. Webhook ko Edge Function handle karne dein.
+      // Direct settlement yahan se bypass ki gayi hai taaki Edge Function handles everything securely
       return res.status(200).json({ 
         status: 'ok', 
         message: 'Acknowledged. Edge webhook processor active.', 
@@ -276,7 +267,7 @@ async function startServer() {
     }
   });
 
-  // 5. Verification Endpoint (Reads state, does not settle arbitrarily)
+  // 5. Verification Endpoint (Read-Only State Check)
   app.post('/api/verify-payment', async (req: Request, res: Response) => {
     const { order_id } = req.body;
     if (!order_id) {
@@ -292,36 +283,7 @@ async function startServer() {
     if (tx && tx.payment_status === 'SUCCESS') {
       return res.json({ success: true, message: 'Order is settled', data: tx });
     }
-
     return res.json({ success: false, message: 'Payment verification in progress' });
-  });
-
-  // 6. Secure Admin Manual Settlement Endpoint (Backend execution only)
-  app.post('/api/admin/simulate-settle', async (req: Request, res: Response) => {
-    try {
-      const { order_id, utr, status = 'SUCCESS' } = req.body;
-      if (!order_id) {
-        return res.status(400).json({ success: false, message: 'order_id is required' });
-      }
-
-      const finalUtr = utr ? String(utr).trim() : `ADMIN_SIM_${Date.now()}`;
-      const { data, error } = await supabase.rpc('settle_p2p_sale', {
-        p_order_id: String(order_id),
-        p_status: status,
-        p_utr: finalUtr,
-        p_webhook_signature: 'ADMIN_PANEL_VERIFIED'
-      });
-
-      if (error) {
-        console.error('[Admin Settle Error]:', error);
-        return res.status(500).json({ success: false, message: error.message });
-      }
-
-      return res.json({ success: true, message: 'Settlement confirmed by backend ledger', data });
-    } catch (err: any) {
-      console.error('[Admin Settle Server Error]:', err);
-      return res.status(500).json({ success: false, message: err.message });
-    }
   });
 
   // Vite middleware in dev or Static in production
