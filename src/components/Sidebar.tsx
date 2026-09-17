@@ -128,7 +128,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="text-base font-bold font-display tracking-tight text-white flex items-center gap-1.5">
                   Money<span className="gold-gradient-text">Ocean</span>
                 </span>
-                <span className="text-[9px] text-slate-400 font-mono">P2P AFFILIATE NODE</span>
+                <span className="text-[9px] text-slate-400 font-mono">P2P AFFILIATE ID</span>
               </div>
             </div>
 
@@ -230,7 +230,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl gold-btn-gradient text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 transition-all hover:scale-101 cursor-pointer"
             >
               <Zap className="w-3.5 h-3.5" />
-              <span>Activate Node{packagePrice > 0 ? ` (₹${packagePrice.toLocaleString('en-IN')})` : ''}</span>
+              <span>Activate ID{packagePrice > 0 ? ` (₹${packagePrice.toLocaleString('en-IN')})` : ''}</span>
             </button>
           )}
 

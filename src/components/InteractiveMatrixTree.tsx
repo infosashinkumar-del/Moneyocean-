@@ -454,8 +454,8 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
           {filteredDirects.length === 0 ? (
             <div className="mt-8 text-center p-8 border border-dashed border-[#1c2436] rounded-2xl max-w-md bg-[#0c1017]/60">
               <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-slate-300">No Direct Team Nodes in View</p>
-              <p className="text-xs text-slate-500 mt-1">Share your referral link to build direct nodes!</p>
+              <p className="text-sm font-semibold text-slate-300">No Direct Team IDs in View</p>
+              <p className="text-xs text-slate-500 mt-1">Share your referral link to build direct IDs!</p>
             </div>
           ) : (
             <div className="w-full relative mt-1">
@@ -630,7 +630,7 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
           <div className="flex items-center gap-2">
             <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span>
-              <strong>Tree Canvas Guide:</strong> Drag canvas to pan. Use Zoom (+/-) to fit. Click any node to inspect or <strong>Drill Down</strong> to explore deep sub-trees.
+              <strong>Tree Canvas Guide:</strong> Drag canvas to pan. Use Zoom (+/-) to fit. Click any ID to inspect or <strong>Drill Down</strong> to explore deep sub-trees.
             </span>
           </div>
           <div className="text-amber-400/90 font-mono text-[10px] font-bold">
@@ -691,7 +691,7 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
                       ? `100% Direct Kept (+₹${((selectedNode.node as any).moneyReceived || unitPrice).toLocaleString('en-IN')} to You)` 
                       : selectedNode.role === 'LEVEL_2'
                         ? `Level 2 Pass-Up Stream (+₹${((selectedNode.node as any).childMoney || unitPrice).toLocaleString('en-IN')})`
-                        : 'Root Node Ledger'}
+                        : 'Root ID Ledger'}
                 </span>
               </div>
               <div className="flex items-center justify-between pb-2 border-b border-[#1c2436]">
@@ -700,7 +700,7 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
                   {selectedNode.node.is_active ? (
                     <>
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Active Verified Node (₹{unitPrice.toLocaleString('en-IN')})</span>
+                      <span>Active Verified ID (₹{unitPrice.toLocaleString('en-IN')})</span>
                     </>
                   ) : (
                     'Pending Activation'

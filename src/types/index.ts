@@ -1,9 +1,11 @@
 export interface PlatformConfig {
-  package_price: number;
+  package_price?: number;
   reservation_lock_minutes?: number;
   fallback_zap_key?: string;
-  marketing_plan_pdf_url?: string;
+  referral_cutoff_date?: string;
   platform_launch_date?: string;
+  marketing_plan_pdf_url?: string;
+  webhook_url?: string;
   [key: string]: any;
 }
 
@@ -70,6 +72,7 @@ export interface Transaction {
   buyer_user_id: string;
   beneficiary_user_id: string;
   transaction_type: string;
+  is_passup?: boolean | null;
   amount: number;
   utr_number: string | null;
   payment_status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED';

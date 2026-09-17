@@ -251,7 +251,7 @@ export const SmartMatrixSimulator: React.FC<SmartMatrixSimulatorProps> = ({
                 <div className="text-left sm:text-right shrink-0 bg-[#07090e]/80 p-3.5 rounded-2xl border border-[#212c40]">
                   <p className="text-[10px] font-mono uppercase text-slate-400">Total Pipeline Team</p>
                   <p className="text-xl sm:text-2xl font-bold font-display text-amber-400 mt-0.5">
-                    {calculation.totalTeamMembers} Nodes
+                    {calculation.totalTeamMembers} IDs
                   </p>
                   <p className="text-[10px] font-mono text-slate-400">
                     {calculation.totalPassupsReceived} Paying Pass-Ups

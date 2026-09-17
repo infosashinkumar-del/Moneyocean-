@@ -255,52 +255,23 @@ async function startServer() {
     }
   });
 
-  // 4. Secure ZapUPI Webhook Endpoint
+  // 4. Secure ZapUPI Webhook Endpoint (Relay-Only to Edge Function / Worker)
   app.post('/api/zapupi-webhook', async (req: Request, res: Response) => {
     try {
       const payload = req.body || {};
       const order_id = payload.order_id || payload.orderId || payload.order_no || payload.tr;
-      const rawStatus = String(payload.status || payload.payment_status || payload.txn_status || '').toUpperCase();
-      const utr = payload.utr || payload.utr_number || payload.bank_ref_no || payload.txn_id || null;
-      const txnId = String(payload.txn_id || '').trim();
 
       if (!order_id) {
         return res.status(400).json({ received: false, error: 'Missing order_id' });
       }
 
-      const isTest = payload.environment === 'test' || txnId.startsWith('DUMMY') || String(order_id).startsWith('TEST_');
-      if (isTest) {
-        return res.status(200).json({ status: 'ok', message: 'Test transaction ignored' });
-      }
-
-      const status = (rawStatus.includes('SUCC') || rawStatus === 'PAID' || rawStatus === 'COMPLETED')
-        ? 'SUCCESS'
-        : 'FAILED';
-
-      try {
-        await supabase.from('webhook_logs').insert({
-          order_id: String(order_id),
-          utr_number: utr ? String(utr) : null,
-          raw_payload: payload,
-          payment_status: status
-        });
-      } catch (_) {}
-
-      const { data, error } = await supabase.rpc('settle_p2p_sale', {
-        p_order_id: String(order_id),
-        p_status: status,
-        p_utr: utr ? String(utr).trim() : null,
-        p_webhook_signature: String(payload.signature || payload.checksum || txnId || 'ZAP_WEBHOOK')
+      // Direct RPC yahan se execute NA karein. Webhook ko Edge Function handle karne dein.
+      return res.status(200).json({ 
+        status: 'ok', 
+        message: 'Acknowledged. Edge webhook processor active.', 
+        order_id: String(order_id) 
       });
-
-      if (error) {
-        console.error('[ZapUPI Webhook] Settle error:', error.message);
-        return res.status(500).json({ status: 'ERROR', error: error.message });
-      }
-
-      return res.status(200).json({ status: 'ok', message: 'Settlement confirmed', order_id: String(order_id) });
     } catch (err: any) {
-      console.error('[ZapUPI Webhook] Server error:', err);
       return res.status(500).json({ status: 'error', message: err.message });
     }
   });

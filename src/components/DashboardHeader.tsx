@@ -35,7 +35,7 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         <div className="flex items-center gap-3">
           <button
             onClick={onToggleSidebar}
-            className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-[#151c2a] border border-[#232f45] cursor-pointer transition-all flex items-center gap-1.5 group"
+            className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-[#151c2a] border border-[#232f48] cursor-pointer transition-all flex items-center gap-1.5 group"
             title={isSidebarCollapsed ? "Expand Sidebar" : "Toggle Full View (Collapse Sidebar)"}
           >
             {isSidebarCollapsed ? (
@@ -58,15 +58,15 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
         </div>
 
         {/* Right side status and controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={handleRefresh}
             disabled={refreshing || loading}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#111722] border border-[#212c40] text-slate-300 hover:text-[#f3c368] hover:border-amber-500/40 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#111722] border border-[#212c40] text-slate-300 hover:text-[#f3c368] hover:border-amber-500/40 text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer shadow-sm"
             title="Refresh balance and network data"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-[#e5a93c]' : 'text-amber-400'}`} />
-            <span className="hidden sm:inline">Sync Ledger</span>
+            <span className="hidden md:inline">Sync Ledger</span>
           </button>
         </div>
       </div>

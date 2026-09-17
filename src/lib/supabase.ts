@@ -75,7 +75,8 @@ export async function getPlatformConfigs(): Promise<PlatformConfig> {
     fallback_zap_key: '',
     referral_cutoff_date: '',
     platform_launch_date: '',
-    marketing_plan_pdf_url: 'https://gedbbysyehtdaqgkrmqk.supabase.co/storage/v1/object/public/marketing%20plan/moneyoceantop.pdf'
+    marketing_plan_pdf_url: 'https://gedbbysyehtdaqgkrmqk.supabase.co/storage/v1/object/public/marketing%20plan/moneyoceantop.pdf',
+    webhook_url: 'https://moneyocean-webhook-shield.moneyocean.workers.dev'
   };
 
   try {
@@ -245,6 +246,7 @@ export async function generateP2PCheckout(
           .select('zap_key')
           .eq('user_id', benId)
           .eq('is_active', true)
+          .order('monthly_received_amount', { ascending: true })
           .order('priority_order', { ascending: true })
           .limit(1);
         if (mKeys && mKeys.length > 0 && mKeys[0].zap_key && String(mKeys[0].zap_key).trim().length > 5) {
@@ -588,6 +590,64 @@ export async function getUserTransactions(userId: string, limit = 20): Promise<T
   return [];
 }
 
+// Helper: Calculate current calendar month earnings (1st of month at 00:00 to month end)
+export async function getUserCalendarMonthEarned(userId: string): Promise<number> {
+  try {
+    // Current calendar month start in ISO format (e.g. 2026-09-01T00:00:00.000Z)
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).toISOString();
+
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('amount')
+      .eq('beneficiary_user_id', userId)
+      .eq('payment_status', 'SUCCESS')
+      .gte('created_at', startOfMonth);
+
+    if (!error && data && Array.isArray(data)) {
+      return data.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+    }
+  } catch (err) {
+    console.warn('getUserCalendarMonthEarned error:', err);
+  }
+  return 0;
+}
+
+// Helper: Calculate real SUCCESS transactions income origin breakdown for direct vs passive passup
+export async function getUserIncomeOriginBreakdown(userId: string): Promise<{ directRetainedEarned: number; passivePassupEarned: number }> {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('beneficiary_user_id', userId)
+      .eq('payment_status', 'SUCCESS');
+
+    if (!error && data && Array.isArray(data)) {
+      let directRetainedEarned = 0;
+      let passivePassupEarned = 0;
+
+      for (const row of data) {
+        const amount = Number(row.amount) || 0;
+        const txType = String(row.transaction_type || '').toUpperCase();
+        const isPassup = Boolean(row.is_passup);
+
+        if (isPassup || txType.includes('PASSUP')) {
+          passivePassupEarned += amount;
+        } else {
+          directRetainedEarned += amount;
+        }
+      }
+
+      return { directRetainedEarned, passivePassupEarned };
+    } else if (error) {
+      console.warn('getUserIncomeOriginBreakdown error:', error.message);
+    }
+  } catch (err) {
+    console.warn('getUserIncomeOriginBreakdown exception:', err);
+  }
+  return { directRetainedEarned: 0, passivePassupEarned: 0 };
+}
+
 // 8. Live User Merchant ZapKeys (Strict Database Query)
 export async function getUserMerchantKeys(userId: string): Promise<UserMerchantKey[]> {
   try {
@@ -615,49 +675,85 @@ export async function saveUserMerchantKey(
   merchantName?: string
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    const { data: existing, error: findErr } = await supabase
+    // 1. Count existing keys for user_id to determine priority_order = (count || 0) + 1
+    const { count, error: countErr } = await supabase
       .from('user_merchant_keys')
-      .select('id')
-      .eq('user_id', userId)
-      .limit(1);
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId);
 
-    if (findErr) {
-      console.warn('Find merchant key error:', findErr.message);
+    if (countErr) {
+      console.warn('Count merchant keys error:', countErr.message);
     }
 
-    if (existing && existing.length > 0) {
-      const { error: updErr } = await supabase
-        .from('user_merchant_keys')
-        .update({
-          zap_key: zapKey.trim(),
-          paytm_merchant_name: merchantName || null,
-          is_active: true
-        })
-        .eq('id', existing[0].id);
+    const priorityOrder = (count ?? 0) + 1;
 
-      if (updErr) throw updErr;
-    } else {
-      const config = await getPlatformConfigs();
-      const defaultLimit = Number(config.monthly_merchant_limit || 0);
+    // 2. Fetch monthly_limit dynamically from platform_configs (key = 'monthly_merchant_limit'), fallback to 75000.00
+    let monthlyLimit = 75000.00;
+    try {
+      const { data: configRow, error: cfgErr } = await supabase
+        .from('platform_configs')
+        .select('value')
+        .eq('key', 'monthly_merchant_limit')
+        .maybeSingle();
 
-      const { error: insErr } = await supabase
-        .from('user_merchant_keys')
-        .insert({
-          user_id: userId,
-          zap_key: zapKey.trim(),
-          paytm_merchant_name: merchantName || null,
-          priority_order: 1,
-          is_active: true,
-          monthly_limit: defaultLimit,
-          monthly_received_amount: 0.00
-        });
-
-      if (insErr) throw insErr;
+      if (!cfgErr && configRow && configRow.value !== undefined && configRow.value !== null) {
+        const parsed = Number(configRow.value);
+        if (!isNaN(parsed) && parsed > 0) {
+          monthlyLimit = parsed;
+        }
+      }
+    } catch (cfgErr) {
+      console.warn('Could not fetch monthly_merchant_limit config, fallback to 75000.00:', cfgErr);
     }
+
+    // 3. Insert new record into public.user_merchant_keys without overwriting
+    const { error: insErr } = await supabase
+      .from('user_merchant_keys')
+      .insert({
+        user_id: userId,
+        zap_key: zapKey.trim(),
+        paytm_merchant_name: merchantName?.trim() || null,
+        priority_order: priorityOrder,
+        is_active: true,
+        monthly_limit: monthlyLimit,
+        monthly_received_amount: 0.00
+      });
+
+    if (insErr) throw insErr;
     return { success: true };
   } catch (err: any) {
     console.error('Save merchant key error:', err);
     return { success: false, message: err.message || 'Failed to save merchant key' };
+  }
+}
+
+export async function deleteUserMerchantKey(keyId: string): Promise<{ success: boolean; message?: string }> {
+  try {
+    const { error } = await supabase
+      .from('user_merchant_keys')
+      .delete()
+      .eq('id', keyId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    console.error('Delete merchant key error:', err);
+    return { success: false, message: err.message || 'Failed to delete merchant key' };
+  }
+}
+
+export async function toggleUserMerchantKeyStatus(keyId: string, isActive: boolean): Promise<{ success: boolean; message?: string }> {
+  try {
+    const { error } = await supabase
+      .from('user_merchant_keys')
+      .update({ is_active: isActive })
+      .eq('id', keyId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    console.error('Toggle merchant key status error:', err);
+    return { success: false, message: err.message || 'Failed to update merchant key status' };
   }
 }
 

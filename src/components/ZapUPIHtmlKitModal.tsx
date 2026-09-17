@@ -396,7 +396,7 @@ export const ZapUPIHtmlKitModal: React.FC<ZapUPIHtmlKitModalProps> = ({
                   </div>
                   {Array.isArray(d.remark_array) && d.remark_array.length > 0 && (
                     <div className="flex justify-between p-3 items-center">
-                      <span className="text-slate-500 font-medium">Split Nodes</span>
+                      <span className="text-slate-500 font-medium">Split IDs</span>
                       <div className="flex gap-1 flex-wrap justify-end">
                         {d.remark_array.map((tag: string, idx: number) => (
                           <span key={idx} className="px-2 py-0.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-full text-[10px] font-bold">

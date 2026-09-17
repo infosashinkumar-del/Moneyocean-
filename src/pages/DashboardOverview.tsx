@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Banknote, 
-  Calendar, 
   CalendarDays, 
   Award, 
   Users, 
@@ -24,7 +23,9 @@ import {
   HelpCircle,
   RefreshCw,
   Layers,
-  Activity
+  Activity,
+  UserCheck,
+  Percent
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -39,7 +40,12 @@ import { useAuth } from '../context/AuthContext';
 import { StatCard } from '../components/StatCard';
 import { ReferralCard } from '../components/ReferralCard';
 import { showToast } from '../components/Toast';
-import { getLiveReferralUrl, getUserTransactions } from '../lib/supabase';
+import { 
+  getLiveReferralUrl, 
+  getUserTransactions, 
+  getUserCalendarMonthEarned, 
+  getUserIncomeOriginBreakdown 
+} from '../lib/supabase';
 import { Transaction } from '../types';
 
 interface DashboardOverviewProps {
@@ -55,6 +61,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const [copied, setCopied] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [calendarMonthEarned, setCalendarMonthEarned] = useState<number | null>(null);
+  const [directRetainedEarned, setDirectRetainedEarned] = useState<number>(0);
+  const [passivePassupEarned, setPassivePassupEarned] = useState<number>(0);
   const [loadingTx, setLoadingTx] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -63,6 +72,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   useEffect(() => {
     if (user?.id) {
       loadRecentTx();
+      loadCalendarMonthEarned();
+      loadIncomeOriginBreakdown();
     }
   }, [user]);
 
@@ -79,9 +90,35 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     }
   };
 
+  const loadCalendarMonthEarned = async () => {
+    if (!user?.id) return;
+    try {
+      const earned = await getUserCalendarMonthEarned(user.id);
+      setCalendarMonthEarned(earned);
+    } catch (err) {
+      console.warn('Error loading calendar month earned:', err);
+    }
+  };
+
+  const loadIncomeOriginBreakdown = async () => {
+    if (!user?.id) return;
+    try {
+      const breakdown = await getUserIncomeOriginBreakdown(user.id);
+      setDirectRetainedEarned(breakdown.directRetainedEarned);
+      setPassivePassupEarned(breakdown.passivePassupEarned);
+    } catch (err) {
+      console.warn('Error loading income origin breakdown:', err);
+    }
+  };
+
   const handleManualRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([refreshUserData(), loadRecentTx()]);
+    await Promise.all([
+      refreshUserData(), 
+      loadRecentTx(), 
+      loadCalendarMonthEarned(),
+      loadIncomeOriginBreakdown()
+    ]);
     setRefreshing(false);
     showToast('info', 'Synced', 'Dashboard stats updated with live blockchain ledger.');
   };
@@ -110,7 +147,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   const todayIncome = dashboardData?.earnings.today ?? user?.today_income ?? 0;
   const last7DaysIncome = dashboardData?.earnings.last_7_days ?? user?.last_7_days_income ?? 0;
-  const last30DaysIncome = dashboardData?.earnings.last_30_days ?? user?.last_30_days_income ?? 0;
+  const thisMonthIncome = calendarMonthEarned !== null 
+    ? calendarMonthEarned 
+    : (dashboardData?.earnings.last_30_days ?? user?.last_30_days_income ?? 0);
   const totalEarned = dashboardData?.earnings.total_earned ?? user?.total_income ?? 0;
 
   const directCount = dashboardData?.network.direct_count ?? user?.direct_referrals_count ?? 0;
@@ -119,11 +158,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   // Qualification Status (3 direct sales required: 1st & 3rd pass-up, 2nd kept => Qualified)
   const isQualified = directCount >= 3;
-
-  // Direct kept sales: Sale #2, and all sales from #4 onwards (Sale #1 & #3 pass up)
-  const directKeptSalesCount = directCount >= 3 ? (directCount - 2) : (directCount === 2 ? 1 : 0);
-  const directRetainedEarned = directKeptSalesCount * unitPrice;
-  const passivePassupEarned = Math.max(0, totalEarned - directRetainedEarned);
 
   const chartData = [
     { name: 'Day -6', income: Math.round(last7DaysIncome * 0.08) },
@@ -194,7 +228,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
 
             <h3 className="text-xl sm:text-2xl lg:text-3xl font-extrabold font-display text-white tracking-tight">
-              Activate Your Node for <span className="gold-gradient-text">₹{unitPrice.toLocaleString('en-IN')} INR</span>
+              Activate Your ID for <span className="gold-gradient-text">₹{unitPrice.toLocaleString('en-IN')} INR</span>
             </h3>
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
@@ -234,8 +268,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
       )}
 
-      {/* 4 Smart Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      {/* Smart Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
         <StatCard
           title="Today's P2P Income"
           value={`₹${Number(todayIncome).toLocaleString('en-IN')}`}
@@ -247,22 +281,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         />
 
         <StatCard
-          title="Last 7 Days"
-          value={`₹${Number(last7DaysIncome).toLocaleString('en-IN')}`}
-          subtitle="Weekly Volume"
-          icon={Calendar}
-          variant="cyan"
-          badge="7-Day Sum"
-          badgeType="info"
-        />
-
-        <StatCard
-          title="Last 30 Days"
-          value={`₹${Number(last30DaysIncome).toLocaleString('en-IN')}`}
-          subtitle="Monthly Cumulative"
+          title="THIS MONTH EARNED"
+          value={`₹${Number(thisMonthIncome).toLocaleString('en-IN')}`}
+          subtitle="1st to Month End (Calendar Month)"
           icon={CalendarDays}
           variant="purple"
-          badge="30-Day Sum"
+          badge="Calendar Month"
           badgeType="info"
         />
 
@@ -341,44 +365,81 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
         {/* Income Breakdown & Network Snapshot (1 col) */}
         <div className="space-y-6">
-          {/* Income Source Card */}
-          <div className="p-6 rounded-3xl bg-[#0c1017]/90 backdrop-blur-xl border border-[#1c2436] shadow-xl space-y-4">
-            <h3 className="text-base font-bold font-display text-white flex items-center gap-2">
-              <Banknote className="w-5 h-5 text-emerald-400" />
-              <span>Income Origin Breakdown</span>
-            </h3>
+          {/* Smart Income Origin Breakdown Cards */}
+          <div className="p-6 rounded-3xl bg-[#0c1017]/90 backdrop-blur-xl border border-[#1c2436] shadow-xl space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold font-display text-white flex items-center gap-2">
+                <Banknote className="w-5 h-5 text-emerald-400" />
+                <span>Income Origin Breakdown</span>
+              </h3>
+              <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-500/40">
+                P2P Split
+              </span>
+            </div>
 
-            <div className="space-y-2.5">
-              <div className="p-3.5 rounded-2xl bg-[#07090e] border border-[#1c2436] flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold text-slate-200">Direct Retained Sales</div>
-                  <div className="text-[10px] text-slate-400">100% Commission kept by you</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-mono font-bold text-emerald-400">
-                    ₹{directRetainedEarned.toLocaleString('en-IN')}
+            {/* Smart Dual Sub-Cards (Matching Top StatCard design) */}
+            <div className="grid grid-cols-1 gap-3.5">
+              {/* Direct Retained Sales Card */}
+              <div className="p-4 rounded-2xl bg-[#07090e] border border-emerald-500/25 hover:border-emerald-400/50 shadow-lg shadow-emerald-950/20 transition-all group">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 font-mono">
+                        Direct Retained Sales
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold font-mono bg-emerald-950/90 text-emerald-400 border border-emerald-500/30">
+                        100% Direct
+                      </span>
+                    </div>
+                    <div className="text-xl sm:text-2xl font-bold font-display text-white mt-1 tracking-tight tabular-nums">
+                      ₹{directRetainedEarned.toLocaleString('en-IN')}
+                    </div>
                   </div>
-                  <div className="text-[10px] font-mono text-slate-400">₹{unitPrice.toLocaleString('en-IN')} per sale</div>
+                  <div className="w-10 h-10 rounded-xl border border-emerald-500/40 bg-emerald-950/60 text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2.5 mt-2.5 border-t border-[#1c2436] text-[11px] text-slate-400">
+                  <span>Commission kept by you</span>
+                  <span className="font-mono text-emerald-400 font-semibold">₹{unitPrice.toLocaleString('en-IN')} / sale</span>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-[#07090e] border border-[#1c2436] flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold text-slate-200">Passive Pass-Up Inflows</div>
-                  <div className="text-[10px] text-slate-400">Downlines' 1st & 3rd sales passed to you</div>
-                </div>
-                <div className="text-right">
-                  <div className="font-mono font-bold text-[#e5a93c]">
-                    ₹{passivePassupEarned.toLocaleString('en-IN')}
+              {/* Passive Pass-Up Inflows Card */}
+              <div className="p-4 rounded-2xl bg-[#07090e] border border-amber-500/25 hover:border-amber-400/50 shadow-lg shadow-amber-950/20 transition-all group">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 font-mono">
+                        Passive Pass-Up Inflows
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-bold font-mono bg-amber-950/90 text-amber-300 border border-amber-500/30">
+                        2-Up Pass-Up
+                      </span>
+                    </div>
+                    <div className="text-xl sm:text-2xl font-bold font-display text-[#e5a93c] mt-1 tracking-tight tabular-nums">
+                      ₹{passivePassupEarned.toLocaleString('en-IN')}
+                    </div>
                   </div>
-                  <div className="text-[10px] font-mono text-slate-400">Automated UPI</div>
+                  <div className="w-10 h-10 rounded-xl border border-amber-500/40 bg-amber-950/60 text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <Zap className="w-4 h-4" />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2.5 mt-2.5 border-t border-[#1c2436] text-[11px] text-slate-400">
+                  <span>Downlines' 1st & 3rd sales</span>
+                  <span className="font-mono text-amber-400 font-semibold">Automated UPI</span>
                 </div>
               </div>
             </div>
 
-            <div className="pt-2 border-t border-[#1c2436] flex items-center justify-between text-xs">
-              <span className="text-slate-400">Total Verified P2P Inflow</span>
-              <span className="font-mono font-bold text-white">₹{Number(totalEarned).toLocaleString('en-IN')}</span>
+            {/* Total Inflow Summary Pill */}
+            <div className="pt-3 border-t border-[#1c2436] flex items-center justify-between text-xs">
+              <span className="text-slate-400 font-medium">Total Verified P2P Inflow</span>
+              <span className="font-mono font-bold text-white text-sm">
+                ₹{Number(totalEarned).toLocaleString('en-IN')}
+              </span>
             </div>
           </div>
 
@@ -393,7 +454,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <div className="p-4 rounded-2xl bg-[#07090e] border border-[#1c2436] text-center">
                 <p className="text-[11px] text-slate-400 font-mono uppercase">Direct Referrals</p>
                 <p className="text-2xl font-bold font-display text-white mt-1">{directCount}</p>
-                <p className="text-[10px] text-emerald-400 mt-0.5">Level 1 Nodes</p>
+                <p className="text-[10px] text-emerald-400 mt-0.5">Level 1 IDs</p>
               </div>
 
               <div className="p-4 rounded-2xl bg-[#07090e] border border-[#1c2436] text-center">
@@ -514,7 +575,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <div className="bg-[#091122] border border-emerald-500/30 rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl relative animate-fadeIn">
             <div className="space-y-1">
               <h3 className="text-lg font-bold font-display text-white">Your Live Referral QR</h3>
-              <p className="text-xs text-slate-400">Scan to join under your node ({user?.referral_code})</p>
+              <p className="text-xs text-slate-400">Scan to join under your ID ({user?.referral_code})</p>
             </div>
 
             <div className="bg-white p-4 rounded-2xl inline-block mx-auto shadow-inner">

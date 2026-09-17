@@ -34,7 +34,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   }, [initialTab]);
 
   const handleToggleSidebar = () => {
-    // Check if on mobile or desktop viewport
     if (typeof window !== 'undefined' && window.innerWidth < 1024) {
       setMobileSidebarOpen(!mobileSidebarOpen);
     } else {
@@ -43,7 +42,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   };
 
   const tabMeta: Record<string, { title: string; subtitle: string }> = {
-    overview: { title: 'Dashboard Overview', subtitle: 'Real-time Node Activity & Peer Ledger' },
+    overview: { title: 'Dashboard Overview', subtitle: 'Real-time ID Activity & Peer Ledger' },
     referral: { title: 'Referral Toolkit', subtitle: 'Your High-Converting Affiliate Links & Marketing Tools' },
     team: { title: 'Team Genealogy', subtitle: 'Direct Matrix & 2-Up Pass-Up Genealogy' },
     transactions: { title: 'Transaction History', subtitle: 'Audited P2P Settlements & Verification Proofs' },
@@ -85,7 +84,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto relative pb-16 bg-[#07090e]/60 transition-all duration-300 w-full">
+        <main className="flex-1 overflow-y-auto relative pb-20 bg-[#07090e]/60 transition-all duration-300 w-full">
           {/* Sub-Tab Routing */}
           <div className="transition-all duration-300">
             {activeTab === 'overview' && (
@@ -95,7 +94,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               />
             )}
 
-            {activeTab === 'referral' && <ReferralToolkit onNavigateCheckout={onNavigateCheckout} />}
+            {activeTab === 'referral' && (
+              <ReferralToolkit 
+                onNavigateCheckout={onNavigateCheckout} 
+              />
+            )}
 
             {activeTab === 'team' && <TeamGenealogy />}
 

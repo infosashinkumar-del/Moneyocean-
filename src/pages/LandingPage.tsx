@@ -37,7 +37,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
   const faqs = [
     {
       q: 'How does the Pure 2-Up (1st & 3rd) Pass-Up System work?',
-      a: `When you make direct sales, your 1st and 3rd sales pass up to your Qualifying Sponsor to qualify your node. From that point on, you keep 100% (₹${unitPrice.toLocaleString('en-IN')} per sale) on Sale #2, #4, #5, #6, and all subsequent sales to infinity! In addition, EVERY member you sponsor must pass their 1st and 3rd sales up to YOU forever!`
+      a: `When you make direct sales, your 1st and 3rd sales pass up to your Qualifying Sponsor to qualify your ID. From that point on, you keep 100% (₹${unitPrice.toLocaleString('en-IN')} per sale) on Sale #2, #4, #5, #6, and all subsequent sales to infinity! In addition, EVERY member you sponsor must pass their 1st and 3rd sales up to YOU forever!`
     },
     {
       q: 'How much do I earn from sales after qualification?',
@@ -85,7 +85,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
             </p>
 
             {/* CTA buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 flex-wrap">
               <button
                 onClick={() => onNavigate('signup')}
                 className="w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-4 rounded-xl gold-btn-gradient font-bold text-base cursor-pointer"

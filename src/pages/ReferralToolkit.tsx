@@ -70,7 +70,7 @@ export const ReferralToolkit: React.FC<ReferralToolkitProps> = ({ onNavigateChec
   };
 
   const handleShareWhatsAppPdf = () => {
-    const text = `🌊 *MoneyOcean - Official Marketing Plan Presentation (PDF)* 📊\n\nCheck out the official MoneyOcean compensation plan & decentralized P2P architecture:\n\n📄 *Download/View PDF Presentation:* ${pdfUrl}\n\n👉 *Join my team and activate your earning node:* ${cleanReferralUrl}\n\nEarn 100% direct UPI payments settled in seconds!`;
+    const text = `🌊 *MoneyOcean - Official Marketing Plan Presentation (PDF)* 📊\n\nCheck out the official MoneyOcean compensation plan & decentralized P2P architecture:\n\n📄 *Download/View PDF Presentation:* ${pdfUrl}\n\n👉 *Join my team and activate your earning ID:* ${cleanReferralUrl}\n\nEarn 100% direct UPI payments settled in seconds!`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -91,7 +91,7 @@ export const ReferralToolkit: React.FC<ReferralToolkitProps> = ({ onNavigateChec
     {
       title: 'High-Conversion Direct WhatsApp Pitch',
       badge: 'Highest ROI',
-      text: `🚀 *MoneyOcean - P2P Wealth Generation Protocol* 🌊\n\nI just started with MoneyOcean and earned direct ₹${unitPrice.toLocaleString('en-IN')} P2P payments settled in seconds straight to my UPI!\n\n🔹 100% Peer-to-Peer Direct Payments\n🔹 1st & 3rd Pass-Up Downline Multiplier\n🔹 No company holding funds — direct UPI\n\n👉 *Join my team today and activate your earning node:* ${cleanReferralUrl}\n\nLet's grow community wealth together! 🤝`
+      text: `🚀 *MoneyOcean - P2P Wealth Generation Protocol* 🌊\n\nI just started with MoneyOcean and earned direct ₹${unitPrice.toLocaleString('en-IN')} P2P payments settled in seconds straight to my UPI!\n\n🔹 100% Peer-to-Peer Direct Payments\n🔹 1st & 3rd Pass-Up Downline Multiplier\n🔹 No company holding funds — direct UPI\n\n👉 *Join my team today and activate your earning ID:* ${cleanReferralUrl}\n\nLet's grow community wealth together! 🤝`
     },
     {
       title: 'Telegram & Social Community Broadcast',
@@ -280,7 +280,7 @@ export const ReferralToolkit: React.FC<ReferralToolkitProps> = ({ onNavigateChec
             <Sparkles className="w-5 h-5 text-[#e5a93c]" />
             <span>High-Conversion Swipe Copy</span>
           </h3>
-          <p className="text-xs text-slate-400">Copy pre-tested marketing copy designed for high conversion rates</p>
+          <p className="text-xs text-slate-400">Copy pre-tested marketing copy designed for high conversion on WhatsApp and social media.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

@@ -193,7 +193,7 @@ export const AdminDashboard: React.FC = () => {
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-950/80 border border-purple-500/40 text-purple-300 text-xs font-mono font-semibold">
             <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Master Top Node Overseer</span>
+            <span>Master Admin Overseer</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold font-display text-white tracking-tight">
             Master Administrator Portal
@@ -227,15 +227,15 @@ export const AdminDashboard: React.FC = () => {
         <StatCard
           title="Active Members"
           value={activeUsersCount}
-          subtitle={`Out of ${activeUsersCount + inactiveUsersCount} registered nodes`}
+          subtitle={`Out of ${activeUsersCount + inactiveUsersCount} registered IDs`}
           icon={UserCheck}
           variant="emerald"
-          badge="Active Nodes"
+          badge="Active IDs"
           badgeType="success"
         />
 
         <StatCard
-          title="Inactive Nodes"
+          title="Inactive IDs"
           value={inactiveUsersCount}
           subtitle="Pending slot payment"
           icon={UserX}
@@ -504,7 +504,7 @@ export const AdminDashboard: React.FC = () => {
                 {globalTransactions.map((tx) => (
                   <tr key={tx.id} className="hover:bg-[#091122]/50">
                     <td className="py-3 px-3 text-emerald-300 font-semibold">{tx.order_id}</td>
-                    <td className="py-3 px-3 font-sans text-white">{tx.buyer?.full_name || 'Buyer Node'}</td>
+                    <td className="py-3 px-3 font-sans text-white">{tx.buyer?.full_name || 'Buyer ID'}</td>
                     <td className="py-3 px-3 font-sans text-teal-400">{tx.beneficiary?.full_name || 'Beneficiary'}</td>
                     <td className="py-3 px-3 font-sans font-bold text-white">₹{Number(tx.amount || 0).toLocaleString('en-IN')}</td>
                     <td className="py-3 px-3">

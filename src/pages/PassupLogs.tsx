@@ -88,7 +88,7 @@ export const PassupLogs: React.FC = () => {
           </div>
           <h4 className="text-sm font-bold text-white">First Sale Qualification</h4>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Your 1st sale is passed up to your qualifying sponsor to initialize your active qualification node.
+            Your 1st sale is passed up to your qualifying sponsor to initialize your active qualification ID.
           </p>
         </div>
 
@@ -169,7 +169,7 @@ export const PassupLogs: React.FC = () => {
 
                       {/* Original Referrer */}
                       <td className="py-4 px-4 font-semibold text-slate-200">
-                        {log.original_referrer_name || 'Member Node'}
+                        {log.original_referrer_name || 'Member ID'}
                       </td>
 
                       {/* Passed To */}

@@ -531,7 +531,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
                 <span>Step 1 of 2 — Invoice Review</span>
               </div>
               <h2 className="text-lg font-bold font-display text-white mt-0.5">
-                License Activation Details
+                ID Activation Details
               </h2>
             </div>
             <div className="text-right">
@@ -605,7 +605,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
             <div className="space-y-2 text-xs pt-1 border-t border-slate-800">
               <div className="flex justify-between items-center py-1">
                 <div>
-                  <div className="font-semibold text-slate-200">MoneyOcean Node License</div>
+                  <div className="font-semibold text-slate-200">MoneyOcean ID Activation</div>
                   <div className="text-[10px] text-slate-400 font-mono">Lifetime P2P Commission Rights + Dashboard</div>
                 </div>
                 <div className="font-mono font-bold text-slate-100 tabular-nums">₹{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
