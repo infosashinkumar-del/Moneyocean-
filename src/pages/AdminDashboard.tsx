@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { supabase, simulateAdminSettlement, getPlatformConfigs, updatePlatformConfig } from '../lib/supabase';
 import { StatCard } from '../components/StatCard';
+import { AdminLeaderSeederCard } from '../components/AdminLeaderSeederCard';
 import { showToast } from '../components/Toast';
 
 export const AdminDashboard: React.FC = () => {
@@ -254,6 +255,9 @@ export const AdminDashboard: React.FC = () => {
         />
       </div>
 
+      {/* New Leader Seeder Component */}
+      <AdminLeaderSeederCard onComplete={fetchAdminData} />
+
       {/* Merchant ZapKey Limit Monitor */}
       <div className="p-6 rounded-3xl bg-[#091122]/70 backdrop-blur-xl border border-emerald-500/15 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
@@ -300,7 +304,7 @@ export const AdminDashboard: React.FC = () => {
                         #{key.user?.referral_code || 'MASTER'}
                       </td>
                       <td className="py-3.5 px-4 text-slate-400">
-                        {key.zap_key?.substring(0, 14)}••••
+                        {key.zap_key?.substring(0, 14)}
                       </td>
                       <td className="py-3.5 px-4 font-bold text-emerald-400 font-sans">
                         ₹{rec.toLocaleString('en-IN')} / ₹{limit.toLocaleString('en-IN')}

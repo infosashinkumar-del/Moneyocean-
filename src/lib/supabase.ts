@@ -602,6 +602,7 @@ export async function getUserCalendarMonthEarned(userId: string): Promise<number
       .select('amount')
       .eq('beneficiary_user_id', userId)
       .eq('payment_status', 'SUCCESS')
+      .neq('transaction_type', 'ADMIN_VIP_SPONSORED_FREE_PASS') // Free seed ko earning me mat jodo
       .gte('created_at', startOfMonth);
 
     if (!error && data && Array.isArray(data)) {
@@ -620,7 +621,8 @@ export async function getUserIncomeOriginBreakdown(userId: string): Promise<{ di
       .from('transactions')
       .select('*')
       .eq('beneficiary_user_id', userId)
-      .eq('payment_status', 'SUCCESS');
+      .eq('payment_status', 'SUCCESS')
+      .neq('transaction_type', 'ADMIN_VIP_SPONSORED_FREE_PASS');
 
     if (!error && data && Array.isArray(data)) {
       let directRetainedEarned = 0;
@@ -675,47 +677,34 @@ export async function saveUserMerchantKey(
   merchantName?: string
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    // 1. Count existing keys for user_id to determine priority_order = (count || 0) + 1
-    const { count, error: countErr } = await supabase
+    const cleanKey = zapKey.trim();
+
+    // 1. Web Crypto API se SHA-256 Hash create karein
+    const msgBuffer = new TextEncoder().encode(cleanKey);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const zapKeyHash = Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    // 2. Existing key count for priority_order
+    const { count } = await supabase
       .from('user_merchant_keys')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId);
 
-    if (countErr) {
-      console.warn('Count merchant keys error:', countErr.message);
-    }
-
     const priorityOrder = (count ?? 0) + 1;
 
-    // 2. Fetch monthly_limit dynamically from platform_configs (key = 'monthly_merchant_limit'), fallback to 75000.00
-    let monthlyLimit = 75000.00;
-    try {
-      const { data: configRow, error: cfgErr } = await supabase
-        .from('platform_configs')
-        .select('value')
-        .eq('key', 'monthly_merchant_limit')
-        .maybeSingle();
-
-      if (!cfgErr && configRow && configRow.value !== undefined && configRow.value !== null) {
-        const parsed = Number(configRow.value);
-        if (!isNaN(parsed) && parsed > 0) {
-          monthlyLimit = parsed;
-        }
-      }
-    } catch (cfgErr) {
-      console.warn('Could not fetch monthly_merchant_limit config, fallback to 75000.00:', cfgErr);
-    }
-
-    // 3. Insert new record into public.user_merchant_keys without overwriting
+    // 3. Database insert with zap_key_hash
     const { error: insErr } = await supabase
       .from('user_merchant_keys')
       .insert({
         user_id: userId,
-        zap_key: zapKey.trim(),
+        zap_key: cleanKey,
+        zap_key_hash: zapKeyHash, // <-- Stored for quick verification & indexing
         paytm_merchant_name: merchantName?.trim() || null,
         priority_order: priorityOrder,
         is_active: true,
-        monthly_limit: monthlyLimit,
+        monthly_limit: 75000.00,
         monthly_received_amount: 0.00
       });
 
@@ -876,5 +865,29 @@ export async function getTeamTree(userId: string): Promise<any[]> {
   } catch (err) {
     console.error('Team tree fetch exception:', err);
     return [];
+  }
+}
+
+// Admin Direct Leader Seeding RPC Wrapper
+export async function adminSeedLeader(leaderUserId: string, adminId: string): Promise<{ success: boolean; message?: string }> {
+  try {
+    const { data, error } = await supabase.rpc('admin_seed_leader_id', {
+      p_leader_user_id: leaderUserId,
+      p_admin_id: adminId
+    });
+
+    if (error) {
+      console.error('admin_seed_leader_id RPC error:', error);
+      return { success: false, message: error.message };
+    }
+
+    if (data && data.success === false) {
+      return { success: false, message: data.message || 'Seeding failed' };
+    }
+
+    return { success: true, message: data?.message || 'Leader activated successfully!' };
+  } catch (err: any) {
+    console.error('adminSeedLeader exception:', err);
+    return { success: false, message: err.message || 'Network error calling RPC' };
   }
 }

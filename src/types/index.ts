@@ -35,12 +35,14 @@ export interface UserMerchantKey {
   id: string;
   user_id: string;
   zap_key: string;
-  paytm_merchant_name: string | null;
+  zap_key_hash?: string;
+  paytm_merchant_name?: string | null;
   priority_order: number;
   is_active: boolean;
-  created_at: string;
   monthly_received_amount: number;
   monthly_limit: number;
+  last_reset_month?: string;
+  created_at: string;
 }
 
 export type TxFsmState = 
@@ -74,20 +76,23 @@ export interface Transaction {
   transaction_type: string;
   is_passup?: boolean | null;
   amount: number;
-  utr_number: string | null;
+  utr_number?: string | null;
   payment_status: 'PENDING' | 'SUCCESS' | 'FAILED' | 'EXPIRED';
   fsm_state?: TxFsmState;
   zap_key_used: string;
+  zap_key_hash?: string;
   webhook_signature?: string | null;
   created_at: string;
   updated_at?: string;
   buyer?: {
     full_name: string;
     email: string;
+    referral_code?: string;
   };
   beneficiary?: {
     full_name: string;
     email: string;
+    referral_code?: string;
   };
 }
 

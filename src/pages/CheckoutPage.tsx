@@ -555,7 +555,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
                   <div className="font-semibold text-slate-200">MoneyOcean ID Activation</div>
                   <div className="text-[10px] text-slate-400 font-mono">Lifetime P2P Commission Rights + Dashboard</div>
                 </div>
-                <div className="font-mono font-bold text-slate-100 tabular-nums">₹{Number(packagePrice || 1).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
+                <div className="font-mono font-bold text-slate-100 tabular-nums">₹{Number(packagePrice || platformConfig?.package_price || 500).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
               </div>
               <div className="flex justify-between items-center py-1 text-slate-400">
                 <div className="flex items-center gap-1">
@@ -570,7 +570,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
                   <div className="text-[10px] font-mono text-emerald-400">100% Peer Transfer</div>
                 </div>
                 <div className="text-2xl font-extrabold font-display text-emerald-400 tabular-nums">
-                  ₹{Number(packagePrice || 1).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹{Number(packagePrice || platformConfig?.package_price || 500).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </div>
               </div>
             </div>
@@ -597,7 +597,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
                   const targetPaymentUrl = checkoutRes.payment_url || paymentUrl;
                   const targetZapKey = checkoutRes.zap_key || dynamicZapKey || platformConfig?.fallback_zap_key || '';
                   const targetOrderId = checkoutRes.order_id || orderId;
-                  const targetAmount = Number(checkoutRes.payment?.amount_inr || checkoutRes.amount || packagePrice || 1);
+                  const targetAmount = Number(checkoutRes.payment?.amount_inr || checkoutRes.amount || packagePrice || platformConfig?.package_price || 500);
 
                   // If ZapUPI kit script is loaded in window
                   if (typeof window !== 'undefined' && (window as any).ZapUPI) {

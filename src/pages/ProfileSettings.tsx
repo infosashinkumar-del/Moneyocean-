@@ -175,8 +175,6 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = () => {
 
   const handleDeleteKey = async (keyItem: UserMerchantKey) => {
     if (actionLoadingId) return;
-    const confirmed = window.confirm('Delete this ZapKey?');
-    if (!confirmed) return;
 
     const previousKeys = [...merchantKeys];
     setMerchantKeys(prev => prev.filter(k => k.id !== keyItem.id));
