@@ -174,3 +174,43 @@
   animation: float 4s ease-in-out infinite;
 }
 
+/* Sacred Chakra Spin Animations */
+@keyframes chakra-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes chakra-spin-reverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.animate-chakra-spin {
+  animation: chakra-spin 8s linear infinite;
+}
+
+.animate-chakra-reverse {
+  animation: chakra-spin-reverse 12s linear infinite;
+}
+
+/* Hide third-party unbranded Swal modals from overriding UltraPay */
+.swal2-container.swal2-backdrop-show {
+  background: rgba(5, 8, 17, 0.9) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+.swal2-popup {
+  background: #0c121e !important;
+  border: 1px solid rgba(229, 169, 60, 0.4) !important;
+  color: #f1f5f9 !important;
+  border-radius: 24px !important;
+}
+

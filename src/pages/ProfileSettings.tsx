@@ -15,7 +15,7 @@ import {
   Copy, 
   Layers, 
   X, 
-  Link2 
+  Link2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -34,7 +34,11 @@ interface ProfileSettingsProps {
   onNavigate?: (tab: string) => void;
 }
 
-export const ProfileSettings: React.FC<ProfileSettingsProps> = () => {
+export const ProfileSettings: React.FC<ProfileSettingsProps> = ({ 
+  onUnlockAdmin, 
+  adminUnlocked, 
+  onNavigate 
+}) => {
   const { user, refreshUserData, packagePrice, platformConfig } = useAuth();
   const unitPrice = packagePrice;
 

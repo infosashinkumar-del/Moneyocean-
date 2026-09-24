@@ -108,7 +108,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
 
             {activeTab === 'profile' && (
               <ProfileSettings
-                onNavigate={(tab) => setActiveTab(tab)}
+                onNavigate={(tab) => {
+                  if (tab === 'checkout') {
+                    onNavigateCheckout();
+                  } else {
+                    setActiveTab(tab);
+                  }
+                }}
               />
             )}
 

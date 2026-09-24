@@ -25,6 +25,7 @@ import {
 import { showToast } from '../components/Toast';
 import { CheckoutResponse } from '../types';
 import { UltraPayLogo } from '../components/UltraPayLogo';
+import { PaymentChakraRedirect } from '../components/PaymentChakraRedirect';
 
 interface CheckoutPageProps {
   onNavigateDashboard: () => void;
@@ -66,6 +67,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
   const [statusText, setStatusText] = useState<string>('Connecting to Instant Payment Gateway...');
   const [statusState, setStatusState] = useState<'' | 'success' | 'failed'>('');
   const [copiedOrderId, setCopiedOrderId] = useState<boolean>(false);
+  const [showChakraRedirect, setShowChakraRedirect] = useState<boolean>(false);
 
   const [dialog, setDialog] = useState<{
     open: boolean;
@@ -241,56 +243,67 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     const targetOrderId = (oId || orderId).trim();
     const targetAmount = amt !== undefined ? amt : (amount || Number(packagePrice || platformConfig?.package_price || 500));
 
-    setStatusText('Redirecting to ZapUPI Transaction Page...');
+    setStatusText('Connecting to Secure Bank Settlement Channel...');
+    setShowChakraRedirect(true);
 
-    if (targetUrl && typeof window !== 'undefined' && (window as any).ZapUPI) {
-      try {
-        (window as any).ZapUPI.loadPayment(targetUrl);
-        setStatusText('ZapUPI gateway active. Complete payment...');
-        return true;
-      } catch (e) {
-        console.warn('ZapUPI loadPayment note:', e);
+    const executeDirect = () => {
+      if (targetUrl && typeof window !== 'undefined' && (window as any).ZapUPI) {
+        try {
+          (window as any).ZapUPI.loadPayment(targetUrl);
+          setStatusText('Instant gateway active. Complete payment...');
+          return true;
+        } catch (e) {
+          console.warn('Payment load note:', e);
+        }
       }
-    }
 
-    if (targetUrl) {
-      window.location.href = targetUrl;
-      return true;
-    }
+      if (targetUrl) {
+        window.location.href = targetUrl;
+        return true;
+      }
 
-    if (targetOrderId && activeKey && typeof window !== 'undefined' && (window as any).ZapUPI) {
-      try {
-        (window as any).ZapUPI.createOrder(
-          {
-            zap_key: activeKey,
-            order_id: targetOrderId,
-            amount: Number(targetAmount).toFixed(2),
-            customer_mobile: user?.mobile || '',
-            remark: `UltraPay|${user?.referral_code || 'P2P'}`
-          },
-          {
-            onResponse: (url: string) => {
-              if ((window as any).ZapUPI) {
-                (window as any).ZapUPI.loadPayment(url);
-                setStatusText('ZapUPI gateway active. Complete payment...');
-              } else {
-                window.location.href = url;
-              }
+      if (targetOrderId && activeKey && typeof window !== 'undefined' && (window as any).ZapUPI) {
+        try {
+          (window as any).ZapUPI.createOrder(
+            {
+              zap_key: activeKey,
+              order_id: targetOrderId,
+              amount: Number(targetAmount).toFixed(2),
+              customer_mobile: user?.mobile || '',
+              remark: `UltraPay|${user?.referral_code || 'P2P'}`
             },
-            onError: (errMsg: string) => {
-              setStatusText('Waiting for payment...');
-              showToast('error', 'ZapUPI Gateway Error', errMsg || 'Failed to initiate payment.');
+            {
+              onResponse: (url: string) => {
+                if ((window as any).ZapUPI) {
+                  (window as any).ZapUPI.loadPayment(url);
+                  setStatusText('Instant gateway active. Complete payment...');
+                } else {
+                  window.location.href = url;
+                }
+              },
+              onError: (errMsg: string) => {
+                setStatusText('Waiting for payment...');
+                setShowChakraRedirect(false);
+                showToast('error', 'Gateway Error', errMsg || 'Failed to initiate payment.');
+              }
             }
-          }
-        );
-        return true;
-      } catch (zapErr) {
-        console.warn('ZapUPI createOrder note:', zapErr);
+          );
+          return true;
+        } catch (zapErr) {
+          console.warn('Payment createOrder note:', zapErr);
+        }
       }
-    }
 
-    showToast('info', 'Gateway Connecting', 'Opening ZapUPI payment page...');
-    return false;
+      showToast('info', 'Gateway Connecting', 'Opening payment page...');
+      return false;
+    };
+
+    // Give user 2.2 seconds to admire the rotating chakra & UltraPay logo lockup
+    setTimeout(() => {
+      executeDirect();
+    }, 2200);
+
+    return true;
   };
 
   // Direct Auto-Launch on BOTH Desktop AND Mobile:
@@ -587,6 +600,45 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
             ID activates instantly upon transaction completion.
           </div>
         </div>
+      )}
+
+      {/* Sacred Rotating Chakra & UltraPay Redirect Overlay */}
+      {showChakraRedirect && (
+        <PaymentChakraRedirect
+          amount={amount || packagePrice || 500}
+          orderId={orderId}
+          beneficiaryName={routingInfo.beneficiary_name}
+          targetPaymentUrl={paymentUrl}
+          autoRedirectSeconds={2.5}
+          onManualProceed={() => {
+            if (paymentUrl) {
+              window.location.href = paymentUrl;
+            } else if ((window as any).ZapUPI && orderId && dynamicZapKey) {
+              try {
+                (window as any).ZapUPI.createOrder(
+                  {
+                    zap_key: dynamicZapKey,
+                    order_id: orderId,
+                    amount: Number(amount || packagePrice || 500).toFixed(2),
+                    customer_mobile: user?.mobile || '',
+                    remark: `UltraPay|${user?.referral_code || 'P2P'}`
+                  },
+                  {
+                    onResponse: (url: string) => {
+                      window.location.href = url;
+                    },
+                    onError: () => {
+                      setShowChakraRedirect(false);
+                    }
+                  }
+                );
+              } catch {
+                setShowChakraRedirect(false);
+              }
+            }
+          }}
+          onCancel={() => setShowChakraRedirect(false)}
+        />
       )}
 
       {/* Success Dialog Modal */}
