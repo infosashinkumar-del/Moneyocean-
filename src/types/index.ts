@@ -100,8 +100,12 @@ export interface PassupLog {
   sale_number: number;
   amount: number;
   passup_reason: string;
+  buyer_name?: string | null;
+  buyer_referral_code?: string | null;
   original_referrer_name: string | null;
+  original_referrer_code?: string | null;
   passed_to_name: string | null;
+  passed_to_code?: string | null;
   date: string;
 }
 

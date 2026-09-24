@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   GitFork, 
   RefreshCw, 
+  UserCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getUserPassupLogs } from '../lib/supabase';
@@ -122,6 +123,7 @@ export const PassupLogs: React.FC = () => {
             <thead className="bg-[#050811] text-slate-400 font-mono uppercase tracking-wider text-[10px] border-b border-slate-800">
               <tr>
                 <th className="py-3.5 px-4">Sale Number</th>
+                <th className="py-3.5 px-4">Passed-Up Sale (Member)</th>
                 <th className="py-3.5 px-4">Amount</th>
                 <th className="py-3.5 px-4">Pass-Up Trigger Reason</th>
                 <th className="py-3.5 px-4">Original Referrer</th>
@@ -132,18 +134,18 @@ export const PassupLogs: React.FC = () => {
             <tbody className="divide-y divide-slate-800/60">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-16 text-center text-slate-400">
+                  <td colSpan={7} className="py-16 text-center text-slate-400">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto text-emerald-400 mb-2" />
                     <span>Loading audit records from database...</span>
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-16 text-center text-slate-500">
+                  <td colSpan={7} className="py-16 text-center text-slate-500">
                     <GitFork className="w-10 h-10 mx-auto text-slate-600 mb-2" />
                     <p className="font-semibold text-slate-400">No pass-up events recorded yet</p>
                     <p className="text-[11px] text-slate-500 mt-1 max-w-md mx-auto">
-                      Pass-up events are automatically created when you or downline partners process sales #2, #4 or #11.
+                      Pass-up events are automatically created when you or downline partners process Sales #1 & #3.
                     </p>
                   </td>
                 </tr>
@@ -153,12 +155,35 @@ export const PassupLogs: React.FC = () => {
                   return (
                     <tr key={index} className="hover:bg-[#091122]/50 transition-colors">
                       {/* Sale # */}
-                      <td className="py-4 px-4 font-mono font-bold text-white">
+                      <td className="py-4 px-4 font-mono font-bold text-white whitespace-nowrap">
                         Sale #{log.sale_number}
                       </td>
 
+                      {/* Passed-Up Sale Member Name */}
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center shrink-0 shadow-sm">
+                            <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+                          </div>
+                          <div>
+                            <span className="font-bold text-white block text-xs">
+                              {log.buyer_name || 'Member Sale'}
+                            </span>
+                            {log.buyer_referral_code ? (
+                              <span className="text-[10px] font-mono text-amber-300/80 block">
+                                ID: {log.buyer_referral_code}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-mono text-slate-500 block">
+                                Sale Qualified
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
                       {/* Amount */}
-                      <td className="py-4 px-4 font-bold font-display text-emerald-400">
+                      <td className="py-4 px-4 font-bold font-display text-emerald-400 whitespace-nowrap">
                         ₹{Number(log.amount || unitPrice).toLocaleString('en-IN')}
                       </td>
 
@@ -169,7 +194,12 @@ export const PassupLogs: React.FC = () => {
 
                       {/* Original Referrer */}
                       <td className="py-4 px-4 font-semibold text-slate-200">
-                        {log.original_referrer_name || 'Member ID'}
+                        <div>{log.original_referrer_name || 'Direct Sponsor'}</div>
+                        {log.original_referrer_code && (
+                          <span className="text-[10px] font-mono text-slate-400 block font-normal">
+                            ID: {log.original_referrer_code}
+                          </span>
+                        )}
                       </td>
 
                       {/* Passed To */}
@@ -177,10 +207,15 @@ export const PassupLogs: React.FC = () => {
                         <span className={`font-semibold ${isReceived ? 'text-emerald-400' : 'text-teal-300'}`}>
                           {log.passed_to_name || 'Qualifying Upline'} {isReceived && '(YOU)'}
                         </span>
+                        {log.passed_to_code && (
+                          <span className="text-[10px] font-mono text-slate-400 block font-normal">
+                            ID: {log.passed_to_code}
+                          </span>
+                        )}
                       </td>
 
                       {/* Date */}
-                      <td className="py-4 px-4 font-mono text-slate-400">
+                      <td className="py-4 px-4 font-mono text-slate-400 whitespace-nowrap">
                         {new Date(log.date).toLocaleString('en-IN', {
                           day: '2-digit',
                           month: 'short',

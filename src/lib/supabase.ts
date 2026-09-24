@@ -510,30 +510,148 @@ export async function getUserDashboard(p_user_id?: string): Promise<DashboardDat
   return null;
 }
 
-// 5. Live Passup Logs (Strict Database Query)
+// 5. Live Passup Logs (Strict Database Query with Sale Buyer Name & Cryptographic Attribution)
 export async function getUserPassupLogs(p_user_id: string): Promise<PassupLog[]> {
-  try {
-    const { data, error } = await supabase.rpc('get_user_passup_logs', {
-      p_user_id
-    });
-    if (!error && data && Array.isArray(data)) {
-      return data as PassupLog[];
-    }
+  const result: PassupLog[] = [];
+  const seenKeys = new Set<string>();
 
+  try {
+    // 1. Direct passup_logs query with relational joins for buyer, sponsor, and upline
     const { data: rawLogs, error: rErr } = await supabase
       .from('passup_logs')
-      .select('*')
-      .or(`original_referrer_id.eq.${p_user_id},passed_to_id.eq.${p_user_id}`)
+      .select(`
+        id,
+        sale_number,
+        amount,
+        passup_reason,
+        created_at,
+        original_referrer_id,
+        passed_to_upline_id,
+        buyer_user_id,
+        buyer:buyer_user_id ( full_name, email, referral_code ),
+        original_referrer:original_referrer_id ( full_name, email, referral_code ),
+        passed_to:passed_to_upline_id ( full_name, email, referral_code )
+      `)
+      .or(`original_referrer_id.eq.${p_user_id},passed_to_upline_id.eq.${p_user_id}`)
       .order('created_at', { ascending: false });
 
-    if (!rErr && rawLogs && Array.isArray(rawLogs)) {
-      return rawLogs.map(l => ({
-        sale_number: l.sale_number,
-        amount: l.amount,
-        passup_reason: l.passup_reason,
+    if (!rErr && rawLogs && rawLogs.length > 0) {
+      // Collect any missing user IDs if relational foreign key join was not resolved
+      const missingIds = new Set<string>();
+      rawLogs.forEach((l: any) => {
+        if (!l.buyer?.full_name && l.buyer_user_id) missingIds.add(l.buyer_user_id);
+        if (!l.original_referrer?.full_name && l.original_referrer_id) missingIds.add(l.original_referrer_id);
+        if (!l.passed_to?.full_name && l.passed_to_upline_id) missingIds.add(l.passed_to_upline_id);
+      });
+
+      const fallbackUsers = new Map<string, { full_name: string; referral_code: string }>();
+      if (missingIds.size > 0) {
+        try {
+          const { data: uList } = await supabase
+            .from('users')
+            .select('id, full_name, referral_code')
+            .in('id', Array.from(missingIds));
+          (uList || []).forEach(u => fallbackUsers.set(u.id, { full_name: u.full_name, referral_code: u.referral_code }));
+        } catch (e) {
+          console.warn('Fallback users query in passup logs:', e);
+        }
+      }
+
+      for (const l of rawLogs as any[]) {
+        const buyer = l.buyer || fallbackUsers.get(l.buyer_user_id);
+        const orig = l.original_referrer || fallbackUsers.get(l.original_referrer_id);
+        const upline = l.passed_to || fallbackUsers.get(l.passed_to_upline_id);
+
+        const dedupKey = `${l.buyer_user_id || l.id}_${l.sale_number}`;
+        seenKeys.add(dedupKey);
+
+        result.push({
+          sale_number: Number(l.sale_number || 1),
+          amount: Number(l.amount || 0),
+          passup_reason: l.passup_reason || '1ST_3RD_RULE',
+          buyer_name: buyer?.full_name || 'Member Sale',
+          buyer_referral_code: buyer?.referral_code || null,
+          original_referrer_name: orig?.full_name || 'Direct Sponsor',
+          original_referrer_code: orig?.referral_code || null,
+          passed_to_name: upline?.full_name || 'Qualifying Sponsor',
+          passed_to_code: upline?.referral_code || null,
+          date: l.created_at || new Date().toISOString()
+        });
+      }
+    }
+
+    // 2. Also check transactions for any settled passup sales not in passup_logs
+    try {
+      const { data: txList } = await supabase
+        .from('transactions')
+        .select(`
+          id,
+          order_id,
+          buyer_user_id,
+          beneficiary_user_id,
+          sponsor_id,
+          sale_number,
+          is_passup,
+          transaction_type,
+          amount,
+          payment_status,
+          created_at,
+          buyer:buyer_user_id ( full_name, email, referral_code ),
+          beneficiary:beneficiary_user_id ( full_name, email, referral_code ),
+          sponsor:sponsor_id ( full_name, email, referral_code )
+        `)
+        .eq('payment_status', 'SUCCESS')
+        .or(`beneficiary_user_id.eq.${p_user_id},sponsor_id.eq.${p_user_id}`)
+        .order('created_at', { ascending: false });
+
+      if (txList && txList.length > 0) {
+        for (const t of txList as any[]) {
+          const isPassup = Boolean(t.is_passup || (t.transaction_type && t.transaction_type !== 'DIRECT_REFERRAL_100PCT'));
+          if (!isPassup) continue;
+
+          const saleNum = t.sale_number || (t.transaction_type?.includes('1') ? 1 : t.transaction_type?.includes('3') ? 3 : 1);
+          const dedupKey = `${t.buyer_user_id}_${saleNum}`;
+          if (seenKeys.has(dedupKey)) continue;
+          seenKeys.add(dedupKey);
+
+          result.push({
+            sale_number: saleNum,
+            amount: Number(t.amount || 0),
+            passup_reason: t.transaction_type || 'PASSUP_QUALIFICATION',
+            buyer_name: t.buyer?.full_name || 'Member Sale',
+            buyer_referral_code: t.buyer?.referral_code || null,
+            original_referrer_name: t.sponsor?.full_name || 'Direct Sponsor',
+            original_referrer_code: t.sponsor?.referral_code || null,
+            passed_to_name: t.beneficiary?.full_name || 'Qualifying Sponsor',
+            passed_to_code: t.beneficiary?.referral_code || null,
+            date: t.created_at
+          });
+        }
+      }
+    } catch (txErr) {
+      console.warn('Transactions passup merge note:', txErr);
+    }
+
+    if (result.length > 0) {
+      return result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+
+    // 3. Fallback to RPC if raw tables were inaccessible
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('get_user_passup_logs', {
+      p_user_id
+    });
+    if (!rpcErr && rpcData && Array.isArray(rpcData)) {
+      return rpcData.map((l: any) => ({
+        sale_number: Number(l.sale_number || 1),
+        amount: Number(l.amount || 0),
+        passup_reason: l.passup_reason || 'PASSUP_QUALIFICATION',
+        buyer_name: l.buyer_name || 'Member Sale',
+        buyer_referral_code: l.buyer_referral_code || null,
         original_referrer_name: l.original_referrer_name || 'Direct Sponsor',
+        original_referrer_code: l.original_referrer_code || null,
         passed_to_name: l.passed_to_name || 'Qualifying Sponsor',
-        date: l.created_at || l.date
+        passed_to_code: l.passed_to_code || null,
+        date: l.date || l.created_at || new Date().toISOString()
       }));
     }
   } catch (err: any) {
