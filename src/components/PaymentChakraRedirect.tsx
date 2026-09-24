@@ -78,51 +78,51 @@ export const PaymentChakraRedirect: React.FC<PaymentChakraRedirectProps> = ({
             THE SACRED ROTATING CHAKRA & ULTRAPAY LOGO LOCKUP
             "uske charo or gol gol gumne wala chakr chle"
            ======================================================== */}
-        <div className="relative flex items-center justify-center py-4 my-2">
-          {/* Layer 1: Outermost Cosmic Particle Glow */}
-          <div className="absolute w-56 h-56 sm:w-64 sm:h-64 rounded-full bg-gradient-to-tr from-amber-500/20 via-yellow-400/10 to-emerald-400/20 blur-xl pointer-events-none animate-pulse" />
+        <div className="relative flex items-center justify-center py-6 my-2">
+          {/* Layer 1: Outermost Radiant Aura Glow */}
+          <div className="absolute w-60 h-60 sm:w-72 sm:h-72 rounded-full bg-gradient-to-tr from-amber-500/25 via-yellow-400/15 to-emerald-400/25 blur-2xl pointer-events-none animate-pulse" />
 
-          {/* Layer 2: Outermost Counter-Clockwise Orbital Ring with Energy Orbs */}
-          <div className="absolute w-52 h-52 sm:w-60 sm:h-60 rounded-full border border-dashed border-amber-500/30 animate-[spin_12s_linear_infinite_reverse] pointer-events-none">
-            <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_12px_#f59e0b]" />
-            <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_12px_#10b981]" />
-            <span className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-2 h-2 rounded-full bg-yellow-300 shadow-[0_0_8px_#ffd700]" />
-            <span className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_#f59e0b]" />
+          {/* Layer 2: Outermost Counter-Clockwise Cosmic Orbital Ring with Glowing Energy Nodes */}
+          <div className="absolute w-56 h-56 sm:w-64 sm:h-64 rounded-full border border-dashed border-amber-400/40 animate-chakra-reverse pointer-events-none">
+            <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-amber-400 shadow-[0_0_14px_#f59e0b]" />
+            <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-emerald-400 shadow-[0_0_14px_#10b981]" />
+            <span className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-yellow-300 shadow-[0_0_10px_#ffd700]" />
+            <span className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_10px_#f59e0b]" />
           </div>
 
-          {/* Layer 3: Golden Chakra Wheel with 24 Sacred Spokes (Clockwise Spinning) */}
-          <div className="absolute w-44 h-44 sm:w-52 sm:h-52 rounded-full border-2 border-amber-400/50 shadow-[0_0_30px_rgba(245,158,11,0.35)] animate-[spin_8s_linear_infinite] pointer-events-none flex items-center justify-center">
-            {/* SVG Chakra Wheel Spokes */}
+          {/* Layer 3: Golden Sacred Chakra Wheel with 24 Sacred Spokes (Clockwise Spinning) */}
+          <div className="absolute w-44 h-44 sm:w-52 sm:h-52 rounded-full border-2 border-amber-400/60 shadow-[0_0_35px_rgba(245,158,11,0.45)] animate-chakra-spin pointer-events-none flex items-center justify-center">
+            {/* SVG Chakra Wheel 24 Spokes */}
             <svg
               viewBox="0 0 200 200"
-              className="w-full h-full text-amber-400/40"
+              className="w-full h-full text-amber-400/50"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
             >
-              <circle cx="100" cy="100" r="94" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 6" />
-              <circle cx="100" cy="100" r="82" stroke="currentColor" strokeWidth="1" />
-              {/* 24 Rays of Chakra */}
+              <circle cx="100" cy="100" r="95" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 6" />
+              <circle cx="100" cy="100" r="82" stroke="currentColor" strokeWidth="1.2" />
+              {/* 24 Sacred Rays of Chakra */}
               {Array.from({ length: 24 }).map((_, i) => (
                 <line
                   key={i}
                   x1="100"
                   y1="100"
                   x2="100"
-                  y2="12"
+                  y2="10"
                   stroke="currentColor"
-                  strokeWidth="1.2"
+                  strokeWidth="1.4"
                   transform={`rotate(${i * 15} 100 100)`}
                   strokeLinecap="round"
-                  className="text-amber-400/60"
+                  className="text-amber-400/70"
                 />
               ))}
-              {/* Decorative Sun Ray Points on Chakra Perimeter */}
+              {/* Decorative Golden Nodes on Chakra Perimeter */}
               {Array.from({ length: 12 }).map((_, i) => (
                 <circle
                   key={i}
                   cx="100"
-                  cy="14"
-                  r="2.5"
+                  cy="12"
+                  r="3"
                   fill="#fcd34d"
                   transform={`rotate(${i * 30} 100 100)`}
                 />
@@ -130,33 +130,35 @@ export const PaymentChakraRedirect: React.FC<PaymentChakraRedirectProps> = ({
             </svg>
           </div>
 
-          {/* Layer 4: Inner Concentric Fast Pulsing Chakra Ring */}
-          <div className="absolute w-36 h-36 sm:w-40 sm:h-40 rounded-full border border-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.3)] animate-[spin_5s_linear_infinite] pointer-events-none">
+          {/* Layer 4: Inner Concentric Fast Pulsing Chakra Energy Orbit */}
+          <div className="absolute w-36 h-36 sm:w-40 sm:h-40 rounded-full border border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.35)] animate-chakra-reverse pointer-events-none">
             <span className="absolute top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-emerald-300 shadow-[0_0_8px_#34d399]" />
             <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-amber-300 shadow-[0_0_8px_#fde047]" />
           </div>
 
-          {/* Layer 5: Center UltraPay Logo Emblem in Pristine High-Definition */}
-          <div className="relative z-20 flex flex-col items-center justify-center p-3 rounded-2xl bg-[#080d16]/90 border border-amber-400/60 shadow-[0_0_25px_rgba(223,169,56,0.5)]">
-            <UltraPayLogo size="lg" variant="vertical" showText={false} showSubtitle={false} />
+          {/* Layer 5: Center UltraPay Logo (24K Gold & Emerald Fintech Emblem) */}
+          <div className="relative z-20 flex flex-col items-center justify-center p-3.5 rounded-2xl bg-[#080d16]/95 border-2 border-amber-400/70 shadow-[0_0_30px_rgba(223,169,56,0.6)]">
+            <UltraPayLogo size="xl" variant="vertical" showText={false} showSubtitle={false} />
           </div>
         </div>
 
-        {/* UltraPay Brand Title & Official Tagline */}
-        <div className="space-y-1.5 pt-1">
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-2xl sm:text-3xl font-extrabold font-display gold-gradient-text tracking-tight">
-              UltraPay
+        {/* UltraPay Brand Title & Official Tagline in Prominent Typography */}
+        <div className="space-y-2 pt-1 text-center">
+          <div className="flex items-center justify-center gap-2.5">
+            <span className="text-3xl sm:text-4xl font-extrabold font-display tracking-tight text-white drop-shadow-[0_2px_12px_rgba(245,158,11,0.5)]">
+              Ultra<span className="bg-gradient-to-r from-[#FFF4CC] via-[#F59E0B] to-[#D97706] bg-clip-text text-transparent">Pay</span>
             </span>
-            <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
+            <span className="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shadow-md shadow-amber-500/20">
               Instant P2P
             </span>
           </div>
 
           {/* Official Tagline Required by User */}
-          <p className="text-xs sm:text-sm font-display font-semibold text-amber-300 tracking-wide drop-shadow-[0_2px_8px_rgba(245,158,11,0.3)]">
-            &ldquo;Har Second Settlement, Seedha Bank Account Mein.&rdquo;
-          </p>
+          <div className="px-4 py-2 rounded-2xl bg-gradient-to-r from-amber-500/10 via-yellow-500/15 to-emerald-500/10 border border-amber-500/30 shadow-inner">
+            <p className="text-sm sm:text-base font-display font-bold text-amber-300 tracking-wide drop-shadow-[0_2px_8px_rgba(245,158,11,0.4)]">
+              &ldquo;Har Second Settlement, Seedha Bank Account Mein.&rdquo;
+            </p>
+          </div>
         </div>
 
         {/* Dynamic Status Progress Indicator */}
