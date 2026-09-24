@@ -8,7 +8,6 @@ import {
   Settings, 
   ShieldCheck, 
   LogOut, 
-  Waves, 
   Zap, 
   CheckCircle2, 
   AlertCircle,
@@ -16,6 +15,7 @@ import {
   X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { UltraPayLogo } from './UltraPayLogo';
 
 interface SidebarProps {
   activeTab?: string;
@@ -117,19 +117,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center justify-between">
             <div 
               onClick={() => handleNavigate('overview')}
-              className="flex items-center gap-3 cursor-pointer"
+              className="cursor-pointer"
             >
-              <div className="w-9 h-9 rounded-xl gold-btn-gradient p-0.5 shadow-lg shadow-amber-500/20">
-                <div className="w-full h-full bg-[#07090e] rounded-[10px] flex items-center justify-center">
-                  <Waves className="w-4.5 h-4.5 text-[#e5a93c]" />
-                </div>
-              </div>
-              <div>
-                <span className="text-base font-bold font-display tracking-tight text-white flex items-center gap-1.5">
-                  Ultra<span className="gold-gradient-text">Pay</span>
-                </span>
-                <span className="text-[9px] text-slate-400 font-mono">P2P AFFILIATE ID</span>
-              </div>
+              <UltraPayLogo size="sm" subtitle="Har Second Settlement, Seedha Bank Account Mein." />
             </div>
 
             <div className="flex items-center gap-1">

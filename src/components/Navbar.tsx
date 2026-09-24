@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Waves, ArrowRight, Menu, X, ChevronRight, User as UserIcon, FileText } from 'lucide-react';
+import { ArrowRight, Menu, X, ChevronRight, User as UserIcon, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { MarketingPlanModal } from './MarketingPlanModal';
+import { UltraPayLogo } from './UltraPayLogo';
 
 interface NavbarProps {
   onNavigate: (route: string) => void;
@@ -40,20 +41,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentRoute }) => {
         {/* Logo */}
         <div 
           onClick={() => onNavigate('landing')} 
-          className="flex items-center gap-3 cursor-pointer group"
+          className="cursor-pointer"
         >
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-[#d8a83d] via-[#f1c550] to-[#c89228] p-0.5 shadow-lg shadow-amber-500/20 group-hover:scale-105 transition-all">
-            <div className="w-full h-full bg-[#07090e] rounded-[10px] flex items-center justify-center">
-              <Waves className="w-6 h-6 text-[#e5a93c] group-hover:text-amber-300 transition-colors" />
-            </div>
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xl font-bold font-display tracking-tight text-white flex items-center gap-1.5">
-              Ultra<span className="text-[#e5a93c]">Pay</span>
-              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-[#e5a93c] border border-amber-500/30 font-mono font-semibold">P2P</span>
-            </span>
-            <span className="text-[11px] text-slate-400 font-medium tracking-wide">Autonomous Wealth Protocol</span>
-          </div>
+          <UltraPayLogo size="md" subtitle="Har Second Settlement, Seedha Bank Account Mein." />
         </div>
 
         {/* Desktop Navigation */}

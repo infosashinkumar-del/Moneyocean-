@@ -39,6 +39,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { StatCard } from '../components/StatCard';
 import { ReferralCard } from '../components/ReferralCard';
+import { UltraPayLogo } from '../components/UltraPayLogo';
 import { showToast } from '../components/Toast';
 import { 
   getLiveReferralUrl, 
@@ -175,8 +176,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-br from-[#0b0f19] via-[#0d1424] to-[#07090e] border border-[#1e2a40] shadow-2xl relative overflow-hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
         <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="space-y-2 relative z-10">
-          <div className="flex flex-wrap items-center gap-2.5">
+        <div className="space-y-3 relative z-10">
+          <div className="flex flex-wrap items-center gap-3">
+            <UltraPayLogo size="xs" subtitle="Har Second Settlement, Seedha Bank Account Mein." />
+            
             {/* Smart Status Badge */}
             {user?.is_active ? (
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#051711] border border-emerald-500/60 text-emerald-400 text-xs sm:text-sm font-bold shadow-[0_0_15px_rgba(16,185,129,0.25)]">

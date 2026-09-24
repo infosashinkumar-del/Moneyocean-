@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { supabase, validateReferralCode } from '../lib/supabase';
 import { showToast } from '../components/Toast';
+import { UltraPayLogo } from '../components/UltraPayLogo';
 
 interface SignUpPageProps {
   onNavigate: (route: string) => void;
@@ -32,12 +33,55 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledRef
 
   // Sponsor validation state
   const [validatingSponsor, setValidatingSponsor] = useState(false);
-  const [sponsorValid, setSponsorValid] = useState<boolean | null>(null);
-  const [sponsorName, setSponsorName] = useState<string | null>(null);
-  const [sponsorError, setSponsorError] = useState<string | null>(null);
+  const [sponsorStatus, setSponsorStatus] = useState<{
+    verified: boolean;
+    isActive: boolean;
+    name: string;
+    message: string;
+  } | null>(null);
 
   const [loading, setLoading] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const checkSponsorCode = async (code: string) => {
+    const clean = code.trim().toUpperCase();
+    if (clean.length < 3) {
+      setSponsorStatus(null);
+      return;
+    }
+
+    setValidatingSponsor(true);
+    try {
+      const { data, error } = await supabase.rpc('validate_referral_code', {
+        p_referral_code: clean
+      });
+
+      if (!error && data) {
+        setSponsorStatus({
+          verified: Boolean(data.valid),
+          isActive: Boolean(data.is_active),
+          name: data.full_name || '',
+          message: data.message || ''
+        });
+      } else {
+        setSponsorStatus({
+          verified: false,
+          isActive: false,
+          name: '',
+          message: 'Referral code not found'
+        });
+      }
+    } catch {
+      setSponsorStatus({
+        verified: false,
+        isActive: false,
+        name: '',
+        message: 'Referral code lookup error'
+      });
+    } finally {
+      setValidatingSponsor(false);
+    }
+  };
 
   // Live password validation indicators (Min 9 Chars, Uppercase, Lowercase, Number, Special Char)
   const passwordChecks = {
@@ -59,8 +103,16 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledRef
   useEffect(() => {
     if (prefilledReferralCode) {
       setSponsorCode(prefilledReferralCode);
+      checkSponsorCode(prefilledReferralCode);
     }
   }, [prefilledReferralCode]);
+
+  // Initial check if sponsorCode exists on mount
+  useEffect(() => {
+    if (sponsorCode && sponsorCode.trim().length >= 3) {
+      checkSponsorCode(sponsorCode);
+    }
+  }, []);
 
   // Real-time debounce sponsor validation (300ms)
   useEffect(() => {
@@ -69,33 +121,15 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledRef
     }
 
     const trimmed = sponsorCode.trim();
-    if (!trimmed) {
-      setSponsorValid(null);
-      setSponsorName(null);
-      setSponsorError(null);
+    if (!trimmed || trimmed.length < 3) {
+      setSponsorStatus(null);
       setValidatingSponsor(false);
       return;
     }
 
     setValidatingSponsor(true);
-    debounceTimerRef.current = setTimeout(async () => {
-      try {
-        const res = await validateReferralCode(trimmed);
-        if (res.valid) {
-          setSponsorValid(true);
-          setSponsorName(res.full_name || 'Verified Sponsor');
-          setSponsorError(null);
-        } else {
-          setSponsorValid(false);
-          setSponsorName(null);
-          setSponsorError(res.message || 'Invalid referral code. Sponsor not found.');
-        }
-      } catch {
-        setSponsorValid(false);
-        setSponsorError('Error looking up referral code');
-      } finally {
-        setValidatingSponsor(false);
-      }
+    debounceTimerRef.current = setTimeout(() => {
+      checkSponsorCode(trimmed);
     }, 300);
 
     return () => {
@@ -127,8 +161,8 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledRef
       return;
     }
 
-    if (sponsorCode.trim() && sponsorValid === false) {
-      showToast('error', 'Invalid Sponsor', 'Please enter a valid sponsor code or leave it blank');
+    if (!sponsorStatus?.verified || !sponsorStatus?.isActive) {
+      showToast('error', 'Sponsor Verification Required', sponsorStatus?.message || 'Please enter a valid and active sponsor code');
       return;
     }
 
@@ -196,12 +230,16 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledRef
       <div className="w-full max-w-lg mx-auto relative z-10">
         {/* Normal Partner Registration Form */}
         <div className="bg-[#0b0e14]/95 backdrop-blur-2xl py-8 px-6 sm:px-10 rounded-[28px] border border-[#1e2533] shadow-2xl shadow-black/80">
-          <div className="text-center mb-7">
-            <h1 className="text-3xl sm:text-4xl font-extrabold font-display text-white tracking-tight">
+          {/* Brand Header */}
+          <div className="flex flex-col items-center justify-center mb-7">
+            <div onClick={() => onNavigate('landing')} className="cursor-pointer mb-5">
+              <UltraPayLogo size="lg" variant="vertical" subtitle="Har Second Settlement, Seedha Bank Account Mein." />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-white tracking-tight">
               Partner Registration
             </h1>
-            <p className="mt-2 text-sm text-slate-400">
-              Join the revolution
+            <p className="mt-1 text-xs sm:text-sm text-slate-400">
+              Join the autonomous peer-to-peer affiliate revolution
             </p>
           </div>
 
@@ -227,24 +265,27 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledRef
                 />
                 <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
                   {validatingSponsor && <Loader2 className="w-4 h-4 text-[#e5a93c] animate-spin" />}
-                  {!validatingSponsor && sponsorValid === true && (
+                  {!validatingSponsor && sponsorStatus?.verified && sponsorStatus?.isActive && (
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
                   )}
-                  {!validatingSponsor && sponsorValid === false && (
+                  {!validatingSponsor && sponsorStatus && (!sponsorStatus.verified || !sponsorStatus.isActive) && (
                     <XCircle className="w-4 h-4 text-rose-400" />
                   )}
                 </div>
               </div>
-              {sponsorValid === true && sponsorName && (
-                <p className="text-xs text-emerald-400 pl-1 font-mono flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 inline text-emerald-400" />
-                  Sponsor Verified: <strong className="text-white">{sponsorName}</strong>
-                </p>
-              )}
-              {sponsorValid === false && sponsorError && (
-                <p className="text-xs text-rose-400 pl-1 font-mono">
-                  {sponsorError}
-                </p>
+
+              {/* Input Field ke niche status badge */}
+              {sponsorStatus && (
+                <div className={`mt-2 p-2.5 rounded-xl text-xs font-mono flex items-center gap-2 ${
+                  !sponsorStatus.verified 
+                    ? 'bg-rose-950/70 text-rose-300 border border-rose-500/30'
+                    : !sponsorStatus.isActive 
+                    ? 'bg-amber-950/80 text-amber-300 border border-amber-500/50'
+                    : 'bg-emerald-950/70 text-emerald-300 border border-emerald-500/40'
+                }`}>
+                  <ShieldCheck className="w-4 h-4 shrink-0" />
+                  <span>{sponsorStatus.message}</span>
+                </div>
               )}
             </div>
 
@@ -385,17 +426,19 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledRef
             {/* Create Account Button */}
             <button
               type="submit"
-              disabled={loading || !isPasswordValid || password !== confirmPassword}
-              className="w-full py-4 rounded-xl gold-btn-gradient font-bold text-base flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 mt-4"
+              disabled={loading || !sponsorStatus?.verified || !sponsorStatus?.isActive || !isPasswordValid || password !== confirmPassword}
+              className="w-full py-3.5 rounded-xl gold-btn-gradient text-slate-950 font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer mt-4"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin text-slate-950" />
                   <span>Creating Account...</span>
                 </>
-              ) : (
-                <span>Create Account</span>
-              )}
+              ) : !sponsorStatus?.verified 
+                ? 'Enter Valid Sponsor Code' 
+                : !sponsorStatus?.isActive 
+                ? 'Registration Blocked: Sponsor Inactive' 
+                : 'Create Account & Continue'}
             </button>
           </form>
 

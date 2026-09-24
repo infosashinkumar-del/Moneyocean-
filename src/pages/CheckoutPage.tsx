@@ -24,6 +24,7 @@ import {
 } from '../lib/supabase';
 import { showToast } from '../components/Toast';
 import { CheckoutResponse } from '../types';
+import { UltraPayLogo } from '../components/UltraPayLogo';
 
 interface CheckoutPageProps {
   onNavigateDashboard: () => void;
@@ -62,7 +63,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
   });
 
   const [remainingSeconds, setRemainingSeconds] = useState<number>(lockMinutes * 60);
-  const [statusText, setStatusText] = useState<string>('Connecting to ZapUPI Gateway...');
+  const [statusText, setStatusText] = useState<string>('Connecting to Instant Payment Gateway...');
   const [statusState, setStatusState] = useState<'' | 'success' | 'failed'>('');
   const [copiedOrderId, setCopiedOrderId] = useState<boolean>(false);
 
@@ -483,13 +484,17 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
           </div>
 
           {/* Brand & Price Header */}
-          <div className="text-center space-y-1.5 pt-1">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono font-semibold">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Direct ZapUPI Gateway</span>
+          <div className="text-center space-y-3 pt-1">
+            <div className="flex justify-center mb-1">
+              <UltraPayLogo size="md" variant="vertical" subtitle="Har Second Settlement, Seedha Bank Account Mein." />
             </div>
 
-            <div className="text-3xl sm:text-4xl font-extrabold font-display gold-gradient-text tracking-tight tabular-nums pt-1">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono font-semibold">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Instant Bank Transfer</span>
+            </div>
+
+            <div className="text-3xl sm:text-4xl font-extrabold font-display gold-gradient-text tracking-tight tabular-nums">
               ₹{Number(amount || packagePrice || 500).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
 
@@ -564,7 +569,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
               ) : (
                 <Zap className="w-5 h-5 fill-slate-950" />
               )}
-              <span>Proceed to ZapUPI Transaction Page</span>
+              <span>Proceed to Instant UPI Payment</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
@@ -578,7 +583,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
           </div>
 
           <div className="text-[11px] text-slate-400 text-center font-mono leading-relaxed pt-1 border-t border-[#182130]">
-            ⚡ Direct ZapUPI opens PhonePe, Google Pay, Paytm & BHIM seamlessly.<br />
+            ⚡ Instant UPI opens PhonePe, Google Pay, Paytm & BHIM seamlessly.<br />
             ID activates instantly upon transaction completion.
           </div>
         </div>

@@ -14,6 +14,7 @@ import {
 import { supabase, simulateAdminSettlement, getPlatformConfigs, updatePlatformConfig } from '../lib/supabase';
 import { StatCard } from '../components/StatCard';
 import { AdminLeaderSeederCard } from '../components/AdminLeaderSeederCard';
+import { UltraPayLogo } from '../components/UltraPayLogo';
 import { showToast } from '../components/Toast';
 
 export const AdminDashboard: React.FC = () => {
@@ -191,10 +192,13 @@ export const AdminDashboard: React.FC = () => {
     <div className="space-y-8 max-w-7xl mx-auto p-4 sm:p-8">
       {/* Header */}
       <div className="p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-[#0b0f19] via-[#101726] to-[#07090e] border border-[#1e2a40] shadow-2xl relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-950/80 border border-purple-500/40 text-purple-300 text-xs font-mono font-semibold">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Master Admin Overseer</span>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <UltraPayLogo size="xs" subtitle="Har Second Settlement, Seedha Bank Account Mein." />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-950/80 border border-purple-500/40 text-purple-300 text-xs font-mono font-semibold">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Master Admin Overseer</span>
+            </div>
           </div>
           <h2 className="text-2xl sm:text-3xl font-bold font-display text-white tracking-tight">
             Master Administrator Portal
@@ -354,7 +358,7 @@ export const AdminDashboard: React.FC = () => {
           </span>
         </div>
         <p className="text-xs text-slate-300 leading-relaxed">
-          The emergency fallback ZapKey and package pricing are fetched directly from your Supabase <code className="text-amber-300 font-mono">platform_configs</code> table. Members' direct payouts use their own registered merchant ZapKeys first; if unconfigured, this live fallback key is allocated.
+          The emergency fallback ZapKey and package pricing are fetched directly from the live database <code className="text-amber-300 font-mono">platform_configs</code> table. Members' direct payouts use their own registered merchant ZapKeys first; if unconfigured, this live fallback key is allocated.
         </p>
 
         <form onSubmit={handleSavePlatformConfig} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">

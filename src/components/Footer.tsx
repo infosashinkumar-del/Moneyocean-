@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Waves, Shield, CheckCircle2, Lock, ArrowUpRight, Zap, RefreshCw, FileText } from 'lucide-react';
+import { Shield, CheckCircle2, Lock, ArrowUpRight, Zap, RefreshCw, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { MarketingPlanModal } from './MarketingPlanModal';
+import { UltraPayLogo } from './UltraPayLogo';
 
 export const Footer: React.FC<{ onNavigate: (route: string) => void }> = ({ onNavigate }) => {
   const { packagePrice, platformConfig } = useAuth();
@@ -18,15 +19,8 @@ export const Footer: React.FC<{ onNavigate: (route: string) => void }> = ({ onNa
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
           {/* Col 1: Brand */}
           <div className="md:col-span-1 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-[#dfa938] via-[#ffd269] to-[#c99326] p-0.5 shadow-md shadow-amber-500/20">
-                <div className="w-full h-full bg-[#07090e] rounded-[7px] flex items-center justify-center">
-                  <Waves className="w-5 h-5 text-[#e5a93c]" />
-                </div>
-              </div>
-              <span className="text-xl font-bold font-display tracking-tight text-white">
-                Ultra<span className="text-[#e5a93c]">Pay</span>
-              </span>
+            <div onClick={() => onNavigate('landing')} className="cursor-pointer inline-block">
+              <UltraPayLogo size="md" subtitle="Har Second Settlement, Seedha Bank Account Mein." />
             </div>
             <p className="text-sm text-slate-400 leading-relaxed">
               Decentralized peer-to-peer affiliate distribution system. 100% direct payouts settled in seconds via UPI directly to your bank account.
@@ -119,7 +113,7 @@ export const Footer: React.FC<{ onNavigate: (route: string) => void }> = ({ onNa
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1.5 text-slate-400">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
-              Powered by Supabase & ZapUPI Realtime Engine
+              Powered by UltraPay Realtime Smart Ledger Engine
             </span>
           </div>
         </div>

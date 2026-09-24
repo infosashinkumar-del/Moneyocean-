@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Zap, ShieldCheck, ArrowUpRight, CheckCircle2, Sparkles } from 'lucide-react';
+import { UltraPayLogo } from './UltraPayLogo';
 
 interface ThreeDMatrixCardProps {
   unitPrice: number;
@@ -104,25 +105,7 @@ export const ThreeDMatrixCard: React.FC<ThreeDMatrixCardProps> = ({ unitPrice, o
 
         {/* Card Header Layer */}
         <div className="flex items-center justify-between pb-3.5 border-b border-[#1c2639]">
-          <div className="flex items-center gap-2.5 sm:gap-3">
-            {/* Rotating Golden Badge */}
-            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-tr from-[#dfa938] via-[#ffd269] to-[#c99326] p-0.5 shadow-md shadow-amber-500/25 shrink-0">
-              <div className="w-full h-full bg-[#07090e] rounded-[13px] flex items-center justify-center animate-coin-3d">
-                <span className="font-extrabold text-[11px] sm:text-xs text-amber-400 font-display tracking-tight">UP</span>
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="text-sm sm:text-base font-extrabold text-white font-display tracking-wide">
-                  Ultra<span className="gold-gradient-text">Pay</span>
-                </span>
-                <span className="text-[9px] sm:text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-500/40">
-                  LIVE PROTOCOL
-                </span>
-              </div>
-              <span className="text-[10px] sm:text-[11px] text-slate-400 font-mono">100% Peer-to-Peer Smart Settlement</span>
-            </div>
-          </div>
+          <UltraPayLogo size="sm" subtitle="Har Second Settlement, Seedha Bank Account Mein." />
 
           <div className="text-right shrink-0">
             <span className="text-[10px] sm:text-[11px] font-mono text-amber-400/90 font-semibold block">2-Up Matrix</span>
@@ -209,7 +192,7 @@ export const ThreeDMatrixCard: React.FC<ThreeDMatrixCardProps> = ({ unitPrice, o
         <div className="mt-4 sm:mt-5 pt-3.5 border-t border-[#1c2639] flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-mono text-slate-400">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>ZapUPI Powered</span>
+            <span>Direct Realtime P2P</span>
           </div>
 
           <div className="inline-flex items-center gap-1 text-xs font-bold text-amber-400 group-hover:text-amber-300 transition-colors">

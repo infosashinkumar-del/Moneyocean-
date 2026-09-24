@@ -46,7 +46,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
     },
     {
       q: 'How are payments received?',
-      a: 'Payments never touch a company bank account or central pool. All transactions are settled directly via ZapUPI and peer-to-peer UPI (Google Pay, PhonePe, Paytm, BHIM) straight into your personal merchant account or bank UPI ID within seconds.'
+      a: 'Payments never touch a company bank account or central pool. All transactions are settled directly peer-to-peer via UPI (Google Pay, PhonePe, Paytm, BHIM) straight into your personal bank account or merchant UPI within seconds.'
     },
     {
       q: `What is the ${lockMins}-minute reservation lock during checkout?`,
@@ -87,6 +87,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold font-display tracking-tight text-white leading-[1.12]">
                 Empower Your Wealth with <span className="gold-gradient-text">UltraPay</span>
               </h1>
+
+              {/* Official Tagline Badge */}
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-r from-amber-500/15 via-[#0e1422] to-emerald-500/15 border border-amber-400/35 text-amber-200 text-xs sm:text-sm font-semibold tracking-wide shadow-md shadow-amber-500/10">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                <span>"Har Second Settlement, Seedha Bank Account Mein."</span>
+              </div>
 
               {/* Subhead */}
               <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl mx-auto lg:mx-0">
@@ -134,7 +140,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                 <span className="text-slate-600">•</span>
                 <span className="flex items-center gap-1.5 text-slate-300">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  ZapUPI Realtime
+                  Realtime
                 </span>
               </div>
             </motion.div>
@@ -239,7 +245,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                 100% Direct UPI Settlements
               </h4>
               <p className="text-sm text-slate-300 leading-relaxed">
-                Funds are transferred peer-to-peer directly into the beneficiary's UPI account via ZapUPI gateway with zero intermediary retention.
+                Funds are transferred peer-to-peer directly into the beneficiary's UPI account via direct realtime gateway with zero intermediary retention.
               </p>
             </div>
 

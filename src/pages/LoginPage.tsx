@@ -11,6 +11,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../components/Toast';
+import { UltraPayLogo } from '../components/UltraPayLogo';
 
 interface LoginPageProps {
   onNavigate: (route: string) => void;
@@ -101,12 +102,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
         {/* Main Card */}
         <div className="bg-[#0b0e14]/95 backdrop-blur-2xl py-8 px-6 sm:px-10 rounded-[28px] border border-[#1e2533] shadow-2xl shadow-black/80">
           
-          {/* Header */}
-          <div className="text-center mb-8">
-            <h1 className="text-3xl sm:text-4xl font-extrabold font-display text-white tracking-tight">
+          {/* Brand Header */}
+          <div className="flex flex-col items-center justify-center mb-8">
+            <div onClick={() => onNavigate('landing')} className="cursor-pointer mb-5">
+              <UltraPayLogo size="lg" variant="vertical" subtitle="Har Second Settlement, Seedha Bank Account Mein." />
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-white tracking-tight">
               Welcome Back
             </h1>
-            <p className="mt-2 text-sm text-slate-400">
+            <p className="mt-1 text-xs sm:text-sm text-slate-400">
               Access your partner dashboard
             </p>
           </div>
