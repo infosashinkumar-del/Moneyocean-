@@ -103,7 +103,7 @@ export const SmartMatrixSimulator: React.FC<SmartMatrixSimulatorProps> = ({
             Smart P2P Yield & Pass-Up Simulator
           </h3>
           <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
-            Simulate your infinite compounding income. In MoneyOcean, you keep 100% (₹{unitPrice.toLocaleString('en-IN')}) of Sales #2 and #4+, and receive the 1st & 3rd sale from every qualifying partner to infinite depth!
+            Simulate your infinite compounding income. In UltraPay, you keep 100% (₹{unitPrice.toLocaleString('en-IN')}) of Sales #2 and #4+, and receive the 1st & 3rd sale from every qualifying partner to infinite depth!
           </p>
         </div>
 

@@ -126,7 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div>
                 <span className="text-base font-bold font-display tracking-tight text-white flex items-center gap-1.5">
-                  Money<span className="gold-gradient-text">Ocean</span>
+                  Ultra<span className="gold-gradient-text">Pay</span>
                 </span>
                 <span className="text-[9px] text-slate-400 font-mono">P2P AFFILIATE ID</span>
               </div>

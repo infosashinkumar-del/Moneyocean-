@@ -12,16 +12,15 @@ import {
   Receipt,
   FileText,
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  Sparkles
 } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../context/AuthContext';
 import { 
   supabase, 
   generateP2PCheckout, 
-  checkZapUPIAutoStatus, 
-  checkZapUPIUtr 
+  checkZapUPIAutoStatus 
 } from '../lib/supabase';
 import { showToast } from '../components/Toast';
 import { CheckoutResponse } from '../types';
@@ -33,17 +32,13 @@ interface CheckoutPageProps {
 export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard }) => {
   const { user, authUser, refreshUserData, packagePrice, platformConfig } = useAuth();
   const lockMinutes = Number(platformConfig?.reservation_lock_minutes || 8);
-  const [checkoutStep, setCheckoutStep] = useState<'invoice' | 'payment'>('invoice');
   const [loading, setLoading] = useState(false);
   const [slotLockedError, setSlotLockedError] = useState<string | null>(null);
 
   const [orderId, setOrderId] = useState<string>('');
   const [payId, setPayId] = useState<string>('');
-  const [amount, setAmount] = useState<number>(packagePrice || 0);
+  const [amount, setAmount] = useState<number>(packagePrice || 500);
   const [dynamicZapKey, setDynamicZapKey] = useState<string>(platformConfig?.fallback_zap_key || '');
-  const [paymentImageUrl, setPaymentImageUrl] = useState<string>('');
-  const [upiButton, setUpiButton] = useState<string>('');
-  const [paytmButton, setPaytmButton] = useState<string>('');
   const [paymentUrl, setPaymentUrl] = useState<string>('');
 
   const [routingInfo, setRoutingInfo] = useState<{
@@ -67,10 +62,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
   });
 
   const [remainingSeconds, setRemainingSeconds] = useState<number>(lockMinutes * 60);
-  const [statusText, setStatusText] = useState<string>(`Waiting for payment...`);
+  const [statusText, setStatusText] = useState<string>('Connecting to ZapUPI Gateway...');
   const [statusState, setStatusState] = useState<'' | 'success' | 'failed'>('');
-  const [utrInput, setUtrInput] = useState<string>('');
-  const [manualCheckBusy, setManualCheckBusy] = useState<boolean>(false);
   const [copiedOrderId, setCopiedOrderId] = useState<boolean>(false);
 
   const [dialog, setDialog] = useState<{
@@ -87,22 +80,21 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
 
   const pollActiveRef = useRef<boolean>(true);
   const pollBusyRef = useRef<boolean>(false);
-  const manualCheckBusyRef = useRef<boolean>(false);
   const finalHandledRef = useRef<boolean>(false);
   const isInitializingRef = useRef<boolean>(false);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const autoLaunchedRef = useRef<boolean>(false);
 
-  // Yeh function ab sirf tab chalega jab user "Proceed to Pay" dabayega
   const initSession = async () => {
-    if (!authUser?.id) return;
-    if (isInitializingRef.current) return;
+    if (!authUser?.id) return null;
+    if (isInitializingRef.current) return null;
     isInitializingRef.current = true;
     setLoading(true);
     setSlotLockedError(null);
     finalHandledRef.current = false;
     pollActiveRef.current = true;
     setRemainingSeconds(lockMinutes * 60);
-    setStatusText(`Waiting for payment...`);
+    setStatusText('Allocating reservation slot...');
     setStatusState('');
     setDialog({ open: false, type: 'SUCCESS', title: '', message: '' });
 
@@ -124,14 +116,15 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
       }
 
       if (!sponsorCode) {
-        sponsorCode = user?.referral_code || 'MO_GENESIS';
+        sponsorCode = user?.referral_code || 'UP_GENESIS';
       }
 
       const res: CheckoutResponse = await generateP2PCheckout(sponsorCode, authUser.id);
       if (res.error_code === 'SLOT_IN_PROGRESS') {
-        setSlotLockedError(res.message || `Payment slot is currently locked by another buyer. Please retry in ${lockMinutes} minutes.`);
+        const errMsg = res.message || `Payment slot is currently locked by another buyer. Please retry in ${lockMinutes} minutes.`;
+        setSlotLockedError(errMsg);
         setLoading(false);
-        return null; // Change from 'return false' to 'return null'
+        return null;
       }
 
       if (res.success && res.order_id) {
@@ -159,21 +152,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
         });
 
         if (res.pay_id) setPayId(res.pay_id);
-        if (res.payment_image_url) setPaymentImageUrl(res.payment_image_url);
         if (res.payment_url) setPaymentUrl(res.payment_url);
 
-        const benUpi = res.payment?.upi_id || (rName ? `paytm.zap.${rName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'node'}@upi` : '');
-        if (res.upi_button) {
-          setUpiButton(res.upi_button);
-        } else if (benUpi) {
-          setUpiButton(`upi://pay?pa=${encodeURIComponent(benUpi)}&pn=${encodeURIComponent(rName || 'MoneyOcean')}&am=${orderAmt}&tr=${res.order_id}&cu=INR&tn=MoneyOcean_${res.order_id}`);
-        }
-
-        if (res.paytm_button) {
-          setPaytmButton(res.paytm_button);
-        } else if (benUpi) {
-          setPaytmButton(`paytmmp://pay?pa=${encodeURIComponent(benUpi)}&pn=${encodeURIComponent(rName || 'MoneyOcean')}&am=${orderAmt}&tr=${res.order_id}&cu=INR`);
-        }
         return res;
       } else {
         throw new Error(res.message || 'Could not allocate reservation slot');
@@ -202,19 +182,19 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     }
 
     if (status === 'SUCCESS') {
-      setStatusText('Payment Received - Activating...');
+      setStatusText('Payment Confirmed - Activating ID...');
       setStatusState('success');
       setDialog({
         open: true,
         type: 'SUCCESS',
         title: 'Payment Received',
-        message: `Your ₹${Number(amount).toLocaleString('en-IN')} P2P payment has been received. Activating your account via secure ledger...`
+        message: `Your ₹${Number(amount).toLocaleString('en-IN')} P2P payment has been confirmed. Activating your UltraPay ID...`
       });
       confetti({
         particleCount: 180,
         spread: 100,
         origin: { y: 0.6 },
-        colors: ['#10b981', '#14b8a6', '#34d399', '#fbbf24']
+        colors: ['#10b981', '#dfa938', '#34d399', '#f6cb56']
       });
       showToast('success', 'Payment Received', 'Payment confirmed! Activating account and syncing ledger...');
       try {
@@ -224,25 +204,21 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
       }
       setTimeout(() => {
         onNavigateDashboard();
-      }, 2400);
+      }, 2000);
     } else if (status === 'FAILED') {
-      setStatusText('Payment Failed');
+      setStatusText('Payment Incomplete');
       setStatusState('failed');
-      setDialog({
-        open: true,
-        type: 'FAILED',
-        title: 'Payment Failed',
-        message: 'The transaction could not be completed or was declined by the bank.'
-      });
+      showToast('error', 'Payment Incomplete', 'Returning to dashboard...');
+      setTimeout(() => {
+        onNavigateDashboard();
+      }, 400);
     } else {
       setStatusText('Payment Timeout');
       setStatusState('failed');
-      setDialog({
-        open: true,
-        type: 'TIMEOUT',
-        title: 'Payment Timeout',
-        message: `The ${lockMinutes}-minute reservation session has expired. Please regenerate a new order.`
-      });
+      showToast('info', 'Session Expired', 'Returning to dashboard...');
+      setTimeout(() => {
+        onNavigateDashboard();
+      }, 400);
     }
   };
 
@@ -258,52 +234,85 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     }
   }, [orderId]);
 
-  const handlePayClick = () => {
-    const activeKey = dynamicZapKey || platformConfig?.fallback_zap_key || '';
+  const launchZapUPI = (payUrl?: string, zKey?: string, oId?: string, amt?: number) => {
+    const targetUrl = payUrl || paymentUrl;
+    const activeKey = (zKey || dynamicZapKey || platformConfig?.fallback_zap_key || '').trim();
+    const targetOrderId = (oId || orderId).trim();
+    const targetAmount = amt !== undefined ? amt : (amount || Number(packagePrice || platformConfig?.package_price || 500));
 
-    if (paymentUrl && typeof window !== 'undefined' && (window as any).ZapUPI) {
+    setStatusText('Redirecting to ZapUPI Transaction Page...');
+
+    if (targetUrl && typeof window !== 'undefined' && (window as any).ZapUPI) {
       try {
-        (window as any).ZapUPI.loadPayment(paymentUrl);
-        return;
+        (window as any).ZapUPI.loadPayment(targetUrl);
+        setStatusText('ZapUPI gateway active. Complete payment...');
+        return true;
       } catch (e) {
         console.warn('ZapUPI loadPayment note:', e);
       }
     }
 
-    if (!orderId || !activeKey || !amount) {
-      showToast('error', 'Payment Incomplete', 'Payment parameters are loading. Please wait a moment or scan the QR code directly.');
-      return;
+    if (targetUrl) {
+      window.location.href = targetUrl;
+      return true;
     }
 
-    if (typeof window !== 'undefined' && (window as any).ZapUPI) {
-      (window as any).ZapUPI.createOrder(
-        {
-          zap_key: activeKey.trim(),
-          order_id: orderId.trim(),
-          amount: Number(amount).toFixed(2),
-          customer_mobile: user?.mobile || '',
-          remark: `MoneyOcean|${user?.referral_code || 'P2P'}`
-        },
-        {
-          onResponse: (url: string) => {
-            if ((window as any).ZapUPI) {
-              (window as any).ZapUPI.loadPayment(url);
-            } else {
-              window.location.href = url;
-            }
+    if (targetOrderId && activeKey && typeof window !== 'undefined' && (window as any).ZapUPI) {
+      try {
+        (window as any).ZapUPI.createOrder(
+          {
+            zap_key: activeKey,
+            order_id: targetOrderId,
+            amount: Number(targetAmount).toFixed(2),
+            customer_mobile: user?.mobile || '',
+            remark: `UltraPay|${user?.referral_code || 'P2P'}`
           },
-          onError: (errMsg: string) => {
-            showToast('error', 'ZapUPI Gateway Error', errMsg || 'Failed to initiate payment. Scan the QR code to pay.');
+          {
+            onResponse: (url: string) => {
+              if ((window as any).ZapUPI) {
+                (window as any).ZapUPI.loadPayment(url);
+                setStatusText('ZapUPI gateway active. Complete payment...');
+              } else {
+                window.location.href = url;
+              }
+            },
+            onError: (errMsg: string) => {
+              setStatusText('Waiting for payment...');
+              showToast('error', 'ZapUPI Gateway Error', errMsg || 'Failed to initiate payment.');
+            }
           }
-        }
-      );
-    } else {
-      showToast('info', 'Pay with QR Code', 'Please scan the QR code above or use the 1-Tap UPI buttons.');
+        );
+        return true;
+      } catch (zapErr) {
+        console.warn('ZapUPI createOrder note:', zapErr);
+      }
     }
+
+    showToast('info', 'Gateway Connecting', 'Opening ZapUPI payment page...');
+    return false;
   };
 
+  // Direct Auto-Launch on BOTH Desktop AND Mobile:
+  // Immediately initialize session and redirect directly to ZapUPI transaction page!
   useEffect(() => {
-    if (checkoutStep !== 'payment' || loading || slotLockedError || finalHandledRef.current) return;
+    if (authUser?.id && !autoLaunchedRef.current && !orderId && !loading && !slotLockedError) {
+      autoLaunchedRef.current = true;
+      (async () => {
+        const res = await initSession();
+        if (res && res.success) {
+          const targetPaymentUrl = res.payment_url || paymentUrl;
+          const targetZapKey = res.zap_key || res.payment?.zap_key || dynamicZapKey;
+          const targetOrderId = res.order_id;
+          const targetAmount = Number(res.payment?.amount_inr || res.amount || packagePrice || platformConfig?.package_price || 500);
+          launchZapUPI(targetPaymentUrl, targetZapKey, targetOrderId, targetAmount);
+        }
+      })();
+    }
+  }, [authUser?.id]);
+
+  // Reservation countdown timer
+  useEffect(() => {
+    if (loading || slotLockedError || finalHandledRef.current) return;
     timerIntervalRef.current = setInterval(() => {
       setRemainingSeconds((prev) => {
         if (prev <= 1) {
@@ -317,11 +326,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [checkoutStep, loading, slotLockedError]);
+  }, [loading, slotLockedError]);
 
   // Safe Database Polling Every 5 Seconds
   useEffect(() => {
-    if (!orderId || checkoutStep !== 'payment' || finalHandledRef.current) return;
+    if (!orderId || finalHandledRef.current) return;
     const pollDatabase = async () => {
       if (finalHandledRef.current) return;
       try {
@@ -360,13 +369,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
       clearInterval(dbPollInterval);
       supabase.removeChannel(channel);
     };
-  }, [orderId, checkoutStep]);
+  }, [orderId]);
 
   // Auto-Check Polling via Gateway Every 5 Seconds
   useEffect(() => {
-    if (!payId || checkoutStep !== 'payment' || finalHandledRef.current) return;
+    if (!payId || finalHandledRef.current) return;
     const autoPoll = async () => {
-      if (!pollActiveRef.current || pollBusyRef.current || manualCheckBusyRef.current || finalHandledRef.current) {
+      if (!pollActiveRef.current || pollBusyRef.current || finalHandledRef.current) {
         return;
       }
       pollBusyRef.current = true;
@@ -390,53 +399,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     const pollInterval = setInterval(autoPoll, 5000);
     autoPoll();
     return () => clearInterval(pollInterval);
-  }, [payId, checkoutStep]);
-
-  const handleVerifyUtr = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (manualCheckBusyRef.current || finalHandledRef.current) return;
-    const utr = utrInput.trim();
-    if (!utr) {
-      setStatusText('Enter UTR to verify');
-      showToast('error', 'UTR Required', 'Please enter your 12-digit UPI Bank Reference Number.');
-      return;
-    }
-    manualCheckBusyRef.current = true;
-    setManualCheckBusy(true);
-    setStatusText('Verifying UTR with gateway...');
-    try {
-      if (payId) {
-        const zapUtrStatus = await checkZapUPIUtr(payId, utr);
-        if (zapUtrStatus === 'SUCCESS') {
-          await handleFinalStatus('SUCCESS', utr);
-          return;
-        }
-      }
-      const { data: tx } = await supabase
-        .from('transactions')
-        .select('payment_status, utr_number')
-        .eq('order_id', orderId)
-        .maybeSingle();
-      if (tx && tx.payment_status === 'SUCCESS') {
-        await handleFinalStatus('SUCCESS', tx.utr_number || utr);
-      } else {
-        setStatusText('Payment verification in progress...');
-        showToast('info', 'Verification Queued', 'UTR submitted. Awaiting gateway webhook confirmation...');
-      }
-    } catch {
-      setStatusText('UTR check notice. Webhook is processing...');
-      showToast('info', 'Processing', 'Payment registered. Server is verifying transaction.');
-    } finally {
-      manualCheckBusyRef.current = false;
-      setManualCheckBusy(false);
-    }
-  };
-
-  const formatTimer = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
+  }, [payId]);
 
   const handleCopyOrderId = () => {
     if (!orderId) return;
@@ -446,430 +409,193 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     setTimeout(() => setCopiedOrderId(false), 2000);
   };
 
-  const handlePasteUtrFromClipboard = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        const cleaned = text.replace(/[^0-9]/g, '').slice(0, 12);
-        if (cleaned) {
-          setUtrInput(cleaned);
-          showToast('success', 'Pasted Reference Number', `Pasted: ${cleaned}`);
-        }
-      }
-    } catch {
-      showToast('info', 'Clipboard Access', 'Please paste the 12-digit UTR manually in the box below');
-    }
+  const formatTimer = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const isUtrValid12Digits = /^\d{12}$/.test(utrInput.trim());
-  const fallbackBeneficiaryUpi = routingInfo.beneficiary_name ? `paytm.zap.${routingInfo.beneficiary_name.toLowerCase().replace(/[^a-z0-9]/g, '') || 'node'}@upi` : '';
-  const fallbackUpiUri = upiButton || (fallbackBeneficiaryUpi ? `upi://pay?pa=${encodeURIComponent(fallbackBeneficiaryUpi)}&pn=${encodeURIComponent(routingInfo.beneficiary_name || 'MoneyOceanP2P')}&am=${amount}&tr=${orderId}&cu=INR&tn=MoneyOcean_${orderId}` : '');
-  const gpayUri = fallbackBeneficiaryUpi ? `upi://pay?pa=${encodeURIComponent(fallbackBeneficiaryUpi)}&pn=${encodeURIComponent(routingInfo.beneficiary_name || 'MoneyOcean')}&am=${amount}&tr=${orderId}&cu=INR&tn=MO_${orderId}` : fallbackUpiUri;
-  const phonepeUri = fallbackBeneficiaryUpi ? `phonepe://pay?pa=${encodeURIComponent(fallbackBeneficiaryUpi)}&pn=${encodeURIComponent(routingInfo.beneficiary_name || 'MoneyOcean')}&am=${amount}&tr=${orderId}&cu=INR&tn=MO_${orderId}` : fallbackUpiUri;
-  const paytmUri = paytmButton || (fallbackBeneficiaryUpi ? `paytmmp://pay?pa=${encodeURIComponent(fallbackBeneficiaryUpi)}&pn=${encodeURIComponent(routingInfo.beneficiary_name || 'MoneyOcean')}&am=${amount}&tr=${orderId}&cu=INR&tn=MO_${orderId}` : fallbackUpiUri);
-  const isPassup = Boolean(routingInfo.is_passup ?? (routingInfo.reason?.toLowerCase().includes('passup') || routingInfo.reason?.toLowerCase().includes('pass-up')));
+  const isPassup = routingInfo.is_passup;
 
   return (
-    <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col justify-center items-center py-8 px-4 sm:px-6 relative selection:bg-emerald-500 selection:text-slate-950 font-sans">
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-72 bg-emerald-500/10 blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-[#07090e] gold-stars-bg flex items-center justify-center p-4 sm:p-6 relative overflow-hidden select-none selection:bg-[#e5a93c] selection:text-slate-950">
+      {/* Background ambient lighting */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-[140px] pointer-events-none" />
 
-      <div className="w-full max-w-[500px] mb-4 flex items-center justify-between">
-        <button
-          onClick={onNavigateDashboard}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Dashboard</span>
-        </button>
-        <div className={`flex items-center gap-1.5 text-[11px] font-mono px-3 py-1 rounded-full border shadow-sm ${
-          isPassup 
-            ? 'text-cyan-400 bg-cyan-950/80 border-cyan-500/40' 
-            : 'text-emerald-400 bg-emerald-950/80 border-emerald-500/40'
-        }`}>
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>{isPassup ? '2-Up Pass-Up Routing' : '100% Direct Settlement'}</span>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="w-full max-w-[500px] p-10 rounded-3xl bg-[#08101e] backdrop-blur-xl border border-emerald-500/20 shadow-2xl text-center space-y-4">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto text-emerald-400" />
-          <h3 className="text-lg font-bold font-display text-white">
-            Allocating Payment Slot...
-          </h3>
-          <p className="text-xs text-slate-400 max-w-xs mx-auto font-mono">
-            Connecting to secure P2P ledger and generating payment parameters...
-          </p>
-        </div>
-      ) : slotLockedError ? (
-        <div className="w-full max-w-[500px] p-8 rounded-3xl bg-[#08101e] backdrop-blur-xl border border-amber-500/40 text-center space-y-5 shadow-2xl">
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mx-auto text-amber-400 animate-pulse">
+      {slotLockedError ? (
+        <div className="w-full max-w-md bg-[#0c111c] border border-rose-500/40 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-2xl relative z-10">
+          <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400">
             <Clock className="w-7 h-7" />
           </div>
-          <div className="space-y-1.5">
-            <h3 className="text-xl font-bold font-display text-white">
-              Slot In Progress
-            </h3>
-            <p className="text-xs text-slate-300 leading-relaxed font-mono">
-              {slotLockedError}
-            </p>
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold font-display text-white">Payment Slot Reserved</h3>
+            <p className="text-xs text-slate-300 leading-relaxed font-mono">{slotLockedError}</p>
           </div>
-          <button
-            onClick={() => setSlotLockedError(null)}
-            className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all cursor-pointer font-mono"
-          >
-            Try Again
-          </button>
-        </div>
-      ) : checkoutStep === 'invoice' ? (
-        <div className="w-full max-w-[500px] bg-[#08101e] border border-emerald-500/30 rounded-3xl p-6 sm:p-7 shadow-2xl relative overflow-hidden backdrop-blur-xl space-y-5 animate-fadeIn">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider">
-                <Receipt className="w-4 h-4" />
-                <span>Step 1 of 2 — Invoice Review</span>
-              </div>
-              <h2 className="text-lg font-bold font-display text-white mt-0.5">
-                ID Activation Details
-              </h2>
-            </div>
-            <div className="text-right">
-              <span className="inline-block px-2.5 py-1 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-[11px] font-mono font-bold">
-                100% P2P Model
-              </span>
-            </div>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-[#030712] border border-slate-800 space-y-3">
-            <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-              <span className="flex items-center gap-1 font-bold text-slate-300 uppercase tracking-wider">
-                <FileText className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Invoice / Bill Breakdown</span>
-              </span>
-              <span className="tabular-nums">Activation Fee</span>
-            </div>
-
-            <div className="space-y-2 text-xs pt-1 border-t border-slate-800">
-              <div className="flex justify-between items-center py-1">
-                <div>
-                  <div className="font-semibold text-slate-200">MoneyOcean ID Activation</div>
-                  <div className="text-[10px] text-slate-400 font-mono">Lifetime P2P Commission Rights + Dashboard</div>
-                </div>
-                <div className="font-mono font-bold text-slate-100 tabular-nums">₹{Number(packagePrice || platformConfig?.package_price || 500).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-              </div>
-              <div className="flex justify-between items-center py-1 text-slate-400">
-                <div className="flex items-center gap-1">
-                  <span>Platform / Admin Cut</span>
-                  <span className="text-[10px] bg-emerald-950 text-emerald-400 px-1.5 py-0.2 rounded border border-emerald-500/20 font-mono">0% Cut</span>
-                </div>
-                <div className="font-mono font-semibold text-emerald-400 tabular-nums">₹0.00</div>
-              </div>
-              <div className="flex justify-between items-center pt-2.5 mt-1 border-t border-dashed border-slate-700">
-                <div>
-                  <div className="text-xs font-bold text-slate-200 uppercase tracking-wider">Total Payable Amount</div>
-                  <div className="text-[10px] font-mono text-emerald-400">100% Peer Transfer</div>
-                </div>
-                <div className="text-2xl font-extrabold font-display text-emerald-400 tabular-nums">
-                  ₹{Number(packagePrice || platformConfig?.package_price || 500).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-3.5 py-2.5 rounded-xl bg-[#030712] border border-slate-800 flex items-center justify-between text-xs font-mono">
-            <div className="text-slate-400">
-              Billed To: <strong className="text-slate-200">{user?.full_name || 'Buyer'}</strong>
-            </div>
-            <div className="text-slate-400">
-              Mob: <span className="text-slate-200">{user?.mobile || 'N/A'}</span>
-            </div>
-          </div>
-
-          <div className="pt-1">
+          <div className="pt-2 flex flex-col gap-2">
             <button
-              type="button"
-              id="payNowProceedButton"
-              onClick={async () => {
-                const checkoutRes = await initSession();
-                if (checkoutRes && checkoutRes.success) {
-                  setCheckoutStep('payment');
-                  
-                  const targetPaymentUrl = checkoutRes.payment_url || paymentUrl;
-                  const targetZapKey = checkoutRes.zap_key || dynamicZapKey || platformConfig?.fallback_zap_key || '';
-                  const targetOrderId = checkoutRes.order_id || orderId;
-                  const targetAmount = Number(checkoutRes.payment?.amount_inr || checkoutRes.amount || packagePrice || platformConfig?.package_price || 500);
-
-                  // If ZapUPI kit script is loaded in window
-                  if (typeof window !== 'undefined' && (window as any).ZapUPI) {
-                    try {
-                      if (targetPaymentUrl) {
-                        (window as any).ZapUPI.loadPayment(targetPaymentUrl);
-                        return;
-                      } else if (targetZapKey && targetOrderId) {
-                        (window as any).ZapUPI.createOrder(
-                          {
-                            zap_key: targetZapKey.trim(),
-                            order_id: targetOrderId.trim(),
-                            amount: targetAmount.toFixed(2),
-                            customer_mobile: user?.mobile || '',
-                            remark: `MoneyOcean|${user?.referral_code || 'P2P'}`
-                          },
-                          {
-                            onResponse: (url: string) => {
-                              if ((window as any).ZapUPI) {
-                                (window as any).ZapUPI.loadPayment(url);
-                              } else {
-                                window.location.href = url;
-                              }
-                            },
-                            onError: (errMsg: string) => {
-                              console.warn('ZapUPI createOrder notice:', errMsg);
-                            }
-                          }
-                        );
-                        return;
-                      }
-                    } catch (zapErr) {
-                      console.warn('ZapUPI launch notice:', zapErr);
-                    }
-                  } else if (targetPaymentUrl) {
-                    window.location.href = targetPaymentUrl;
-                  }
-                }
+              onClick={() => {
+                setSlotLockedError(null);
+                autoLaunchedRef.current = false;
+                initSession();
               }}
-              className="w-full text-center py-4 px-4 rounded-xl font-bold text-base bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              className="w-full py-3.5 rounded-xl gold-btn-gradient text-slate-950 font-bold text-xs cursor-pointer shadow-lg shadow-amber-500/20"
             >
-              <Zap className="w-5 h-5 fill-slate-950" />
-              <span>Pay via ZapUPI</span>
-              <ArrowRight className="w-4 h-4" />
+              Retry Allocation
+            </button>
+            <button
+              onClick={onNavigateDashboard}
+              className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 text-xs font-mono transition-colors cursor-pointer"
+            >
+              Return to Dashboard
             </button>
           </div>
         </div>
       ) : (
-        <div className="w-full max-w-[500px] bg-[#08101e] border border-emerald-500/30 rounded-3xl p-6 shadow-2xl relative overflow-hidden backdrop-blur-xl space-y-5 animate-fadeIn">
-          <div className="flex justify-between items-center">
+        /* Unified Direct ZapUPI Transaction Card (Desktop & Mobile) */
+        <div className="w-full max-w-[480px] bg-[#0c121e]/95 border border-amber-500/35 rounded-[32px] p-6 sm:p-8 shadow-2xl shadow-black/90 relative overflow-hidden backdrop-blur-2xl space-y-5 z-10 card-3d-glow animate-in fade-in duration-300">
+          
+          {/* Top Bar */}
+          <div className="flex items-center justify-between border-b border-[#1b2538] pb-4">
             <button
-              onClick={() => setCheckoutStep('invoice')}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer"
+              onClick={onNavigateDashboard}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>View Bill & Details</span>
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
             </button>
-            <div 
-              id="timer"
-              className={`text-xs font-mono font-bold px-3 py-1 rounded-full border transition-colors flex items-center gap-1.5 tabular-nums ${
-                remainingSeconds < 120 
-                  ? 'bg-rose-950/80 text-rose-300 border-rose-500/40 animate-pulse' 
-                  : 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              <span>{formatTimer(remainingSeconds)}</span>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold">
+                100% P2P
+              </span>
+              <div 
+                className={`text-xs font-mono font-bold px-3 py-1 rounded-full border transition-colors flex items-center gap-1.5 tabular-nums ${
+                  remainingSeconds < 120 
+                    ? 'bg-rose-950/80 text-rose-300 border-rose-500/40 animate-pulse' 
+                    : 'bg-amber-950/80 text-amber-300 border-amber-500/40'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>{formatTimer(remainingSeconds)}</span>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#030712] border border-slate-800 text-[10px] font-mono text-center">
-            <div className="py-1 rounded-lg bg-emerald-950 text-emerald-300 font-bold border border-emerald-500/30">
-              1. Scan & Pay
+          {/* Brand & Price Header */}
+          <div className="text-center space-y-1.5 pt-1">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono font-semibold">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Direct ZapUPI Gateway</span>
             </div>
-            <div className="py-1 rounded-lg bg-slate-900 text-slate-300 font-medium">
-              2. Paste UTR
+
+            <div className="text-3xl sm:text-4xl font-extrabold font-display gold-gradient-text tracking-tight tabular-nums pt-1">
+              ₹{Number(amount || packagePrice || 500).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <div className="py-1 rounded-lg bg-slate-900 text-slate-400">
-              3. Activated
+
+            <div className="text-xs text-slate-400 font-mono flex items-center justify-center gap-1.5">
+              <span>Order ID: <strong className="text-slate-200 font-bold">{orderId || 'Initializing...'}</strong></span>
+              {orderId && (
+                <button
+                  onClick={handleCopyOrderId}
+                  className="text-slate-400 hover:text-amber-400 cursor-pointer transition-colors p-1"
+                  title="Copy Order ID"
+                >
+                  {copiedOrderId ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-[#030712] border border-emerald-500/30 flex items-center justify-between text-xs font-mono">
+          {/* Beneficiary Node Details */}
+          <div className="p-3.5 rounded-2xl bg-[#070b14] border border-[#1b2538] flex items-center justify-between text-xs font-mono">
             <div>
-              <div className="text-[10px] text-slate-400">Paying To Beneficiary</div>
-              <div className="font-bold text-white truncate">{routingInfo.beneficiary_name || 'Admin Beneficiary'}</div>
+              <div className="text-[10px] text-slate-500">Beneficiary Recipient</div>
+              <div className="font-bold text-white text-sm truncate">{routingInfo.beneficiary_name || 'Admin Beneficiary'}</div>
             </div>
             <div className="text-right">
-              <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+              <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold ${
                 isPassup 
-                  ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/30' 
+                  ? 'bg-amber-950 text-amber-300 border border-amber-500/30' 
                   : 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
               }`}>
-                {isPassup ? '2-Up Pass-Up' : 'Direct Sale'}
+                {isPassup ? '2-Up Pass-Up' : '100% Direct'}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 text-xs text-slate-300 font-mono">
+          {/* Live Status Indicator */}
+          <div className="flex items-center gap-2.5 text-xs text-slate-300 font-mono px-1">
             <span
-              id="statusDot"
-              className={`w-2.5 h-2.5 rounded-full transition-colors ${
+              className={`w-2.5 h-2.5 rounded-full ${
                 statusState === 'success'
                   ? 'bg-emerald-400 ring-4 ring-emerald-500/20'
                   : statusState === 'failed'
                   ? 'bg-rose-500 ring-4 ring-rose-500/20'
-                  : 'bg-emerald-400 ring-4 ring-emerald-500/20 animate-pulse'
+                  : 'bg-amber-400 ring-4 ring-amber-500/20 animate-pulse'
               }`}
             />
-            <span id="statusText" className="font-medium">
+            <span className="font-medium text-[11px] truncate text-slate-200">
               {statusText}
             </span>
           </div>
 
-          <div className="text-center">
-            <div className="text-3xl sm:text-4xl font-extrabold font-display text-emerald-400 tracking-tight tabular-nums">
-              ₹{Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-            <div className="text-xs text-slate-400 font-mono mt-1 flex items-center justify-center gap-1.5">
-              <span>Order ID: <strong className="text-slate-200">{orderId}</strong></span>
-              <button
-                onClick={handleCopyOrderId}
-                className="text-slate-400 hover:text-emerald-400 cursor-pointer transition-colors p-1"
-                title="Copy Order ID"
-              >
-                {copiedOrderId ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="border border-emerald-500/20 rounded-2xl p-4 bg-[#030712] flex flex-col justify-center items-center min-h-[220px] relative shadow-inner">
-            {paymentImageUrl ? (
-              <img
-                src={paymentImageUrl}
-                alt="Payment QR"
-                className="max-w-[190px] max-h-[190px] object-contain rounded-lg shadow-md border border-slate-800"
-                onError={() => setPaymentImageUrl('')}
-              />
-            ) : (
-              <div className="p-3 bg-white rounded-xl shadow-2xl border-2 border-emerald-400/40 inline-block">
-                <QRCodeSVG
-                  value={fallbackUpiUri}
-                  size={175}
-                  level="H"
-                  includeMargin={false}
-                />
-              </div>
-            )}
-            <div className="text-[11px] font-mono text-slate-400 mt-2.5 text-center">
-              Scan with GPay, PhonePe, Paytm, BHIM, Cred or any UPI App
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-[11px] font-mono text-slate-400 flex items-center justify-between">
-              <span>Quick 1-Tap Mobile UPI Intent</span>
-              <span className="text-emerald-400 font-semibold">Zero Fees</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <a
-                href={gpayUri}
-                onClick={() => setStatusText('Opening Google Pay...')}
-                className="p-2.5 rounded-xl bg-[#030712] hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/50 text-center font-mono text-xs font-semibold text-slate-200 transition-all flex flex-col items-center gap-1 cursor-pointer"
-              >
-                <span className="text-emerald-400 font-black text-sm">GPay</span>
-                <span className="text-[10px] text-slate-400">Google Pay</span>
-              </a>
-              <a
-                href={phonepeUri}
-                onClick={() => setStatusText('Opening PhonePe...')}
-                className="p-2.5 rounded-xl bg-[#030712] hover:bg-slate-900 border border-slate-800 hover:border-purple-500/50 text-center font-mono text-xs font-semibold text-slate-200 transition-all flex flex-col items-center gap-1 cursor-pointer"
-              >
-                <span className="text-purple-400 font-black text-sm">PhonePe</span>
-                <span className="text-[10px] text-slate-400">Instant</span>
-              </a>
-              <a
-                href={paytmUri}
-                onClick={() => setStatusText('Opening Paytm...')}
-                className="p-2.5 rounded-xl bg-[#030712] hover:bg-slate-900 border border-slate-800 hover:border-cyan-500/50 text-center font-mono text-xs font-semibold text-slate-200 transition-all flex flex-col items-center gap-1 cursor-pointer"
-              >
-                <span className="text-cyan-400 font-black text-sm">Paytm</span>
-                <span className="text-[10px] text-slate-400">UPI App</span>
-              </a>
-            </div>
-          </div>
-
-          <div className="grid gap-2.5">
+          {/* Primary Action Buttons */}
+          <div className="space-y-3 pt-2">
             <button
               type="button"
-              id="payButton"
-              onClick={handlePayClick}
-              className="w-full text-center py-3.5 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              id="directPayButton"
+              onClick={() => {
+                if (!orderId) {
+                  initSession().then((res) => {
+                    if (res && res.success) {
+                      launchZapUPI(res.payment_url, res.zap_key, res.order_id, res.amount);
+                    }
+                  });
+                } else {
+                  launchZapUPI();
+                }
+              }}
+              disabled={loading}
+              className="w-full text-center py-4 px-4 rounded-xl font-bold text-sm sm:text-base gold-btn-gradient text-slate-950 shadow-xl shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50 font-display tracking-wide"
             >
-              <Zap className="w-4 h-4 fill-slate-950" />
-              <span>Pay ₹{Number(amount).toLocaleString('en-IN')} via ZapUPI Gateway</span>
+              {loading ? (
+                <RefreshCw className="w-5 h-5 animate-spin text-slate-950" />
+              ) : (
+                <Zap className="w-5 h-5 fill-slate-950" />
+              )}
+              <span>Proceed to ZapUPI Transaction Page</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={onNavigateDashboard}
+              className="w-full py-3 rounded-xl bg-[#070b14] hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 text-xs font-mono font-medium transition-all cursor-pointer"
+            >
+              Cancel & Return to Dashboard
             </button>
           </div>
 
-          <div className="flex items-center gap-3 my-2 text-slate-500 text-[11px] font-mono font-semibold uppercase tracking-wider">
-            <div className="flex-1 h-px bg-slate-800" />
-            <span>SUBMIT 12-DIGIT UTR / REFERENCE</span>
-            <div className="flex-1 h-px bg-slate-800" />
-          </div>
-
-          <form onSubmit={handleVerifyUtr} className="space-y-2">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <input
-                  id="utrInput"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  maxLength={12}
-                  value={utrInput}
-                  onChange={(e) => setUtrInput(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="Enter 12-digit UPI UTR"
-                  className="w-full px-3.5 py-2.5 pr-20 rounded-xl bg-[#030712] border border-slate-800 focus:border-emerald-500 text-xs font-mono text-slate-100 placeholder-slate-600 focus:outline-none transition-all tabular-nums tracking-wider"
-                />
-                <button
-                  type="button"
-                  onClick={handlePasteUtrFromClipboard}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-[10px] font-mono transition-colors cursor-pointer"
-                >
-                  Paste
-                </button>
-              </div>
-              <button
-                id="verifyUtr"
-                type="submit"
-                disabled={manualCheckBusy || !utrInput.trim()}
-                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 font-mono"
-              >
-                {manualCheckBusy ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Check className="w-3.5 h-3.5" />
-                )}
-                <span>{manualCheckBusy ? 'Checking...' : 'Verify'}</span>
-              </button>
-            </div>
-            {isUtrValid12Digits && (
-              <div className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" />
-                <span>Valid 12-Digit Reference format ready for instant ledger activation</span>
-              </div>
-            )}
-          </form>
-
-          <div className="text-[11px] text-slate-400 text-center leading-relaxed font-mono pt-1">
-            Real-time ledger polling active every 5 seconds.<br />
-            100% Peer Transfer — Zero Admin Deduction
+          <div className="text-[11px] text-slate-400 text-center font-mono leading-relaxed pt-1 border-t border-[#182130]">
+            ⚡ Direct ZapUPI opens PhonePe, Google Pay, Paytm & BHIM seamlessly.<br />
+            ID activates instantly upon transaction completion.
           </div>
         </div>
       )}
 
-      {dialog.open && (
+      {/* Success Dialog Modal */}
+      {dialog.open && dialog.type === 'SUCCESS' && (
         <div 
           id="dialog"
-          className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fadeIn"
+          className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200"
         >
-          <div className="bg-[#08101e] border border-emerald-500/30 w-full max-w-[360px] rounded-3xl p-6 text-center space-y-4 shadow-2xl animate-scaleUp">
+          <div className="bg-[#0c121e] border border-amber-500/40 w-full max-w-[360px] rounded-3xl p-6 text-center space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
             <div 
               id="dialogIcon"
-              className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto text-3xl font-bold shadow-lg ${
-                dialog.type === 'SUCCESS' 
-                  ? 'bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 animate-bounce' 
-                  : dialog.type === 'FAILED' 
-                  ? 'bg-rose-500/20 border-2 border-rose-400 text-rose-400' 
-                  : 'bg-amber-500/20 border-2 border-amber-400 text-amber-400'
-              }`}
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto text-3xl font-bold shadow-lg bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400"
             >
-              {dialog.type === 'SUCCESS' ? '✓' : dialog.type === 'FAILED' ? '✕' : '!'}
+              ✓
             </div>
             <div className="space-y-1.5">
               <h3 id="dialogTitle" className="text-xl font-bold font-display text-white">
@@ -880,24 +606,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
               </p>
             </div>
             <div className="pt-2">
-              {dialog.type === 'SUCCESS' ? (
-                <button
-                  onClick={onNavigateDashboard}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/25 transition-all hover:scale-102 cursor-pointer font-mono"
-                >
-                  Enter Your Dashboard
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    setCheckoutStep('invoice');
-                    setSlotLockedError(null);
-                  }}
-                  className="w-full py-3 rounded-xl bg-[#030712] hover:bg-slate-900 border border-slate-700 text-slate-200 font-bold text-xs transition-all cursor-pointer font-mono"
-                >
-                  Try Again
-                </button>
-              )}
+              <button
+                onClick={onNavigateDashboard}
+                className="w-full py-3.5 rounded-xl gold-btn-gradient text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/25 transition-all cursor-pointer font-mono"
+              >
+                Enter Your Dashboard
+              </button>
             </div>
           </div>
         </div>

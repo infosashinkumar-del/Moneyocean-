@@ -163,7 +163,7 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledRef
         return;
       }
 
-      showToast('success', 'Account Created!', 'Welcome to MoneyOcean. Redirecting to login...');
+      showToast('success', 'Account Created!', 'Welcome to UltraPay. Redirecting to login...');
       
       setTimeout(() => {
         onNavigate('login');
@@ -206,6 +206,48 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledRef
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Sponsor / Referral Code (TOP OF FORM) */}
+            <div className="p-3.5 rounded-2xl bg-[#0e1422] border border-amber-500/40 shadow-md shadow-amber-500/5 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold uppercase tracking-wider text-[#e5a93c] font-mono">
+                  SPONSOR / REFERRAL CODE
+                </label>
+                <span className="text-[10px] font-mono text-slate-400">Step 1: Verify Sponsor</span>
+              </div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                  <Users className="w-4 h-4 text-amber-400" />
+                </div>
+                <input
+                  type="text"
+                  value={sponsorCode}
+                  onChange={(e) => setSponsorCode(e.target.value.toUpperCase())}
+                  placeholder="Referral ID"
+                  className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#070b14] border border-[#212a3d] focus:border-[#e5a93c] text-white placeholder-slate-500 text-sm uppercase font-mono focus:outline-none transition-all font-semibold tracking-wide"
+                />
+                <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
+                  {validatingSponsor && <Loader2 className="w-4 h-4 text-[#e5a93c] animate-spin" />}
+                  {!validatingSponsor && sponsorValid === true && (
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  )}
+                  {!validatingSponsor && sponsorValid === false && (
+                    <XCircle className="w-4 h-4 text-rose-400" />
+                  )}
+                </div>
+              </div>
+              {sponsorValid === true && sponsorName && (
+                <p className="text-xs text-emerald-400 pl-1 font-mono flex items-center gap-1">
+                  <ShieldCheck className="w-3.5 h-3.5 inline text-emerald-400" />
+                  Sponsor Verified: <strong className="text-white">{sponsorName}</strong>
+                </p>
+              )}
+              {sponsorValid === false && sponsorError && (
+                <p className="text-xs text-rose-400 pl-1 font-mono">
+                  {sponsorError}
+                </p>
+              )}
+            </div>
+
             {/* Full Name */}
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono mb-1.5">
@@ -338,44 +380,6 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledRef
                   {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-            </div>
-
-            {/* Sponsor Code */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#e5a93c] font-mono mb-1.5">
-                SPONSOR CODE
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                  <Users className="w-4 h-4" />
-                </div>
-                <input
-                  type="text"
-                  value={sponsorCode}
-                  onChange={(e) => setSponsorCode(e.target.value.toUpperCase())}
-                  placeholder="Referral ID"
-                  className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#111622] border border-[#212a3d] focus:border-[#e5a93c] text-white placeholder-slate-500 text-sm uppercase font-mono focus:outline-none transition-all"
-                />
-                <div className="absolute right-3.5 top-1/2 -translate-y-1/2">
-                  {validatingSponsor && <Loader2 className="w-4 h-4 text-[#e5a93c] animate-spin" />}
-                  {!validatingSponsor && sponsorValid === true && (
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  )}
-                  {!validatingSponsor && sponsorValid === false && (
-                    <XCircle className="w-4 h-4 text-rose-400" />
-                  )}
-                </div>
-              </div>
-              {sponsorValid === true && sponsorName && (
-                <p className="text-xs text-emerald-400 mt-1 pl-1">
-                  Sponsor Verified: <strong className="text-white">{sponsorName}</strong>
-                </p>
-              )}
-              {sponsorValid === false && sponsorError && (
-                <p className="text-xs text-rose-400 mt-1 pl-1">
-                  {sponsorError}
-                </p>
-              )}
             </div>
 
             {/* Create Account Button */}

@@ -35,7 +35,7 @@ export const ZapUPIHtmlKitModal: React.FC<ZapUPIHtmlKitModalProps> = ({
   defaultOrderId = '',
   defaultAmount,
   customerMobile = '',
-  remark = 'MoneyOcean P2P Slot',
+  remark = 'UltraPay P2P Slot',
   onPaymentSuccess
 }) => {
   const [activeTab, setActiveTab] = useState<'create' | 'status'>('create');
@@ -591,7 +591,7 @@ export const ZapUPIHtmlKitModal: React.FC<ZapUPIHtmlKitModalProps> = ({
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span>ZapUPI Official JS Kit</span>
           </div>
-          <span>MoneyOcean P2P Engine</span>
+          <span>UltraPay P2P Engine</span>
         </div>
       </div>
     </div>

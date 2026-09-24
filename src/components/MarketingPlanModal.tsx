@@ -66,7 +66,7 @@ export const MarketingPlanModal: React.FC<MarketingPlanModalProps> = ({
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = 'MoneyOcean_Marketing_Plan.pdf';
+      link.download = 'UltraPay_Marketing_Plan.pdf';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -78,7 +78,7 @@ export const MarketingPlanModal: React.FC<MarketingPlanModalProps> = ({
       const link = document.createElement('a');
       link.href = pdfUrl;
       link.target = '_blank';
-      link.download = 'MoneyOcean_Marketing_Plan.pdf';
+      link.download = 'UltraPay_Marketing_Plan.pdf';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -114,7 +114,7 @@ export const MarketingPlanModal: React.FC<MarketingPlanModalProps> = ({
             <div className="truncate">
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-bold font-display text-white truncate">
-                  MoneyOcean Marketing Plan
+                  UltraPay Marketing Plan
                 </h3>
                 <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[10px] font-mono font-semibold">
                   <Sparkles className="w-3 h-3 text-amber-400" />
@@ -181,13 +181,13 @@ export const MarketingPlanModal: React.FC<MarketingPlanModalProps> = ({
           {iframeLoading && (
             <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#07090e]/95 space-y-3">
               <Loader2 className="w-8 h-8 text-[#e5a93c] animate-spin" />
-              <p className="text-xs font-mono tracking-wider text-slate-400">Loading MoneyOcean Presentation PDF...</p>
+              <p className="text-xs font-mono tracking-wider text-slate-400">Loading UltraPay Presentation PDF...</p>
             </div>
           )}
 
           <iframe
             src={`${pdfUrl}#toolbar=0`}
-            title="MoneyOcean Marketing Plan PDF"
+            title="UltraPay Marketing Plan PDF"
             className="w-full h-full border-0 bg-[#07090e]"
             onLoad={() => setIframeLoading(false)}
           />

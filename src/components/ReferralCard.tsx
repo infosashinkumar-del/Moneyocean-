@@ -19,7 +19,7 @@ export const ReferralCard: React.FC<ReferralCardProps> = ({
 
   const referralUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/register?ref=${user.referral_code || ''}`
-    : `https://moneyocean.live/register?ref=${user.referral_code || ''}`;
+    : `https://ultrapay.live/register?ref=${user.referral_code || ''}`;
 
   const handleCopy = () => {
     if (!user.referral_code) return;

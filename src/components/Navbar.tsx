@@ -49,7 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentRoute }) => {
           </div>
           <div className="flex flex-col">
             <span className="text-xl font-bold font-display tracking-tight text-white flex items-center gap-1.5">
-              Money<span className="text-[#e5a93c]">Ocean</span>
+              Ultra<span className="text-[#e5a93c]">Pay</span>
               <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-[#e5a93c] border border-amber-500/30 font-mono font-semibold">P2P</span>
             </span>
             <span className="text-[11px] text-slate-400 font-medium tracking-wide">Autonomous Wealth Protocol</span>
@@ -76,43 +76,43 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentRoute }) => {
           </button>
         </nav>
 
-        {/* Action Buttons */}
-        <div className="hidden sm:flex items-center gap-3">
+        {/* Action Buttons: Visible on both Desktop and Mobile */}
+        <div className="flex items-center gap-2 sm:gap-3">
           {authUser ? (
             <button
               onClick={() => onNavigate('dashboard')}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl gold-btn-gradient font-bold text-sm cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl gold-btn-gradient font-bold text-xs sm:text-sm cursor-pointer shadow-md shadow-amber-500/15"
             >
-              <UserIcon className="w-4 h-4" />
-              <span>Go to Dashboard</span>
-              <ChevronRight className="w-4 h-4" />
+              <UserIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>Dashboard</span>
+              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           ) : (
             <>
+              {/* Direct Sign In Button visible on mobile & desktop */}
               <button
                 onClick={() => onNavigate('login')}
-                className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-colors cursor-pointer"
+                className="px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-semibold text-slate-200 hover:text-[#e5a93c] bg-[#111726]/80 hover:bg-[#161f33] border border-slate-700/60 rounded-xl transition-all cursor-pointer"
               >
                 Sign In
               </button>
               <button
                 onClick={() => onNavigate('signup')}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl gold-btn-gradient font-bold text-sm cursor-pointer"
+                className="flex items-center gap-1 sm:gap-2 px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl gold-btn-gradient font-bold text-xs sm:text-sm cursor-pointer shadow-md shadow-amber-500/20"
               >
-                <span>Join MoneyOcean</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>Join <span className="hidden xs:inline">UltraPay</span></span>
+                <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </>
           )}
-        </div>
 
-        {/* Mobile menu button */}
-        <div className="md:hidden flex items-center">
+          {/* Mobile menu button */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-xl bg-[#0e131c] border border-slate-800 text-slate-400 hover:text-white"
+            className="md:hidden p-2 rounded-xl bg-[#0e131c] border border-slate-800 text-slate-400 hover:text-white"
+            aria-label="Navigation Menu"
           >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </div>

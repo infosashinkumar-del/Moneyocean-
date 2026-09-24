@@ -135,13 +135,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   const handleShareWhatsapp = () => {
     if (!referralUrl) return;
-    const text = `🔥 *MoneyOcean 100% P2P Earning Model* 🔥\n\nDirect ₹${unitPrice.toLocaleString('en-IN')} commission on every peer sale directly to your UPI/Bank. 100% transparent 2-Up pass-up matrix.\n\n👉 Join my team here: ${referralUrl}\nSponsor Code: *${user?.referral_code || ''}*`;
+    const text = `🔥 *UltraPay 100% P2P Earning Model* 🔥\n\nDirect ₹${unitPrice.toLocaleString('en-IN')} commission on every peer sale directly to your UPI/Bank. 100% transparent 2-Up pass-up matrix.\n\n👉 Join my team here: ${referralUrl}\nSponsor Code: *${user?.referral_code || ''}*`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleShareTelegram = () => {
     if (!referralUrl) return;
-    const text = `🚀 MoneyOcean Autonomous P2P Network — ₹${unitPrice.toLocaleString('en-IN')} Direct Payouts. Join now: ${referralUrl}`;
+    const text = `🚀 UltraPay Autonomous P2P Network — ₹${unitPrice.toLocaleString('en-IN')} Direct Payouts. Join now: ${referralUrl}`;
     window.open(`https://t.me/share/url?url=${encodeURIComponent(referralUrl)}&text=${encodeURIComponent(text)}`, '_blank');
   };
 

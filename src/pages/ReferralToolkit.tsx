@@ -52,7 +52,7 @@ export const ReferralToolkit: React.FC<ReferralToolkitProps> = ({ onNavigateChec
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'MoneyOcean_Marketing_Plan.pdf';
+      a.download = 'UltraPay_Marketing_Plan.pdf';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -62,7 +62,7 @@ export const ReferralToolkit: React.FC<ReferralToolkitProps> = ({ onNavigateChec
       const a = document.createElement('a');
       a.href = pdfUrl;
       a.target = '_blank';
-      a.download = 'MoneyOcean_Marketing_Plan.pdf';
+      a.download = 'UltraPay_Marketing_Plan.pdf';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -70,7 +70,7 @@ export const ReferralToolkit: React.FC<ReferralToolkitProps> = ({ onNavigateChec
   };
 
   const handleShareWhatsAppPdf = () => {
-    const text = `🌊 *MoneyOcean - Official Marketing Plan Presentation (PDF)* 📊\n\nCheck out the official MoneyOcean compensation plan & decentralized P2P architecture:\n\n📄 *Download/View PDF Presentation:* ${pdfUrl}\n\n👉 *Join my team and activate your earning ID:* ${cleanReferralUrl}\n\nEarn 100% direct UPI payments settled in seconds!`;
+    const text = `⚡ *UltraPay - Official Marketing Plan Presentation (PDF)* 📊\n\nCheck out the official UltraPay compensation plan & decentralized P2P architecture:\n\n📄 *Download/View PDF Presentation:* ${pdfUrl}\n\n👉 *Join my team and activate your earning ID:* ${cleanReferralUrl}\n\nEarn 100% direct UPI payments settled in seconds!`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -91,17 +91,17 @@ export const ReferralToolkit: React.FC<ReferralToolkitProps> = ({ onNavigateChec
     {
       title: 'High-Conversion Direct WhatsApp Pitch',
       badge: 'Highest ROI',
-      text: `🚀 *MoneyOcean - P2P Wealth Generation Protocol* 🌊\n\nI just started with MoneyOcean and earned direct ₹${unitPrice.toLocaleString('en-IN')} P2P payments settled in seconds straight to my UPI!\n\n🔹 100% Peer-to-Peer Direct Payments\n🔹 1st & 3rd Pass-Up Downline Multiplier\n🔹 No company holding funds — direct UPI\n\n👉 *Join my team today and activate your earning ID:* ${cleanReferralUrl}\n\nLet's grow community wealth together! 🤝`
+      text: `🚀 *UltraPay - P2P Wealth Generation Protocol* ⚡\n\nI just started with UltraPay and earned direct ₹${unitPrice.toLocaleString('en-IN')} P2P payments settled in seconds straight to my UPI!\n\n🔹 100% Peer-to-Peer Direct Payments\n🔹 1st & 3rd Pass-Up Downline Multiplier\n🔹 No company holding funds — direct UPI\n\n👉 *Join my team today and activate your earning ID:* ${cleanReferralUrl}\n\nLet's grow community wealth together! 🤝`
     },
     {
       title: 'Telegram & Social Community Broadcast',
       badge: 'Viral Broadcast',
-      text: `🌊 *New Decentralized P2P Affiliate System: MoneyOcean*\n\nStop relying on delayed company payouts. MoneyOcean settles ₹${unitPrice.toLocaleString('en-IN')} per package instantly into your bank account via UPI.\n\n💎 100% Direct ₹${unitPrice.toLocaleString('en-IN')} Payouts\n⚡ Automated 1st & 3rd Pass-Up Algorithm\n🛡️ Transparent Ledger\n\nJoin with my referral link: ${cleanReferralUrl}`
+      text: `⚡ *New Decentralized P2P Affiliate System: UltraPay*\n\nStop relying on delayed company payouts. UltraPay settles ₹${unitPrice.toLocaleString('en-IN')} per package instantly into your bank account via UPI.\n\n💎 100% Direct ₹${unitPrice.toLocaleString('en-IN')} Payouts\n⚡ Automated 1st & 3rd Pass-Up Algorithm\n🛡️ Transparent Ledger\n\nJoin with my referral link: ${cleanReferralUrl}`
     },
     {
       title: 'Short & Punchy Status / Story Swipe',
       badge: 'Quick Story',
-      text: `Earn ₹${unitPrice.toLocaleString('en-IN')} per direct referral straight into your UPI account with MoneyOcean P2P. Instant settlements, 0 middlemen. Join here: ${cleanReferralUrl}`
+      text: `Earn ₹${unitPrice.toLocaleString('en-IN')} per direct referral straight into your UPI account with UltraPay P2P. Instant settlements, 0 middlemen. Join here: ${cleanReferralUrl}`
     }
   ];
 

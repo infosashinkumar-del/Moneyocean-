@@ -76,7 +76,7 @@ export async function getPlatformConfigs(): Promise<PlatformConfig> {
     referral_cutoff_date: '',
     platform_launch_date: '',
     marketing_plan_pdf_url: 'https://gedbbysyehtdaqgkrmqk.supabase.co/storage/v1/object/public/marketing%20plan/moneyoceantop.pdf',
-    webhook_url: 'https://moneyocean-webhook-shield.moneyocean.workers.dev'
+    webhook_url: 'https://ultrapay-webhook-shield.ultrapay.workers.dev'
   };
 
   try {
@@ -298,7 +298,7 @@ export async function generateP2PCheckout(
           order_id: baseCheckout.order_id,
           zap_key: activeZapKey,
           beneficiary_upi: baseCheckout.payment?.upi_id || '',
-          remark: `MoneyOcean|${cleanCode}|${benCode}`
+          remark: `UltraPay|${cleanCode}|${benCode}`
         });
 
         if (zapRes && zapRes.success) {

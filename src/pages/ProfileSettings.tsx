@@ -44,7 +44,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = () => {
 
   // ZapUPI Webhook URL state
   const [copiedWebhook, setCopiedWebhook] = useState(false);
-  const activeWebhookUrl = platformConfig?.webhook_url || 'https://moneyocean-webhook-shield.moneyocean.workers.dev';
+  const activeWebhookUrl = platformConfig?.webhook_url || 'https://ultrapay-webhook-shield.ultrapay.workers.dev';
 
   const handleCopyWebhook = () => {
     navigator.clipboard.writeText(activeWebhookUrl);
