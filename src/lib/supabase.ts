@@ -510,13 +510,26 @@ export async function getUserDashboard(p_user_id?: string): Promise<DashboardDat
   return null;
 }
 
-// 5. Live Passup Logs (Strict Database Query with Sale Buyer Name & Cryptographic Attribution)
+// 5. Live Passup Logs (Strict Database Query with Real Buyer Name & Cryptographic Attribution)
 export async function getUserPassupLogs(p_user_id: string): Promise<PassupLog[]> {
+  // 1. Fetch via backend proxy endpoint (uses service_role key to bypass client-side RLS and resolve real buyer names)
+  try {
+    const resp = await fetch(`/api/passup-logs/${encodeURIComponent(p_user_id)}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data.success && Array.isArray(data.logs) && data.logs.length > 0) {
+        return data.logs;
+      }
+    }
+  } catch (apiErr) {
+    console.warn('[Passup Logs] API proxy fetch note:', apiErr);
+  }
+
   const result: PassupLog[] = [];
   const seenKeys = new Set<string>();
 
   try {
-    // 1. Direct passup_logs query with relational joins for buyer, sponsor, and upline
+    // 2. Direct passup_logs query with relational joins for buyer, sponsor, and upline
     const { data: rawLogs, error: rErr } = await supabase
       .from('passup_logs')
       .select(`
@@ -708,6 +721,31 @@ export async function getUserTransactions(userId: string, limit = 20): Promise<T
   return [];
 }
 
+// 7b. Live Income Transactions for Analytical Chart Aggregation
+export async function getUserIncomeTransactions(userId: string, limit = 200): Promise<Transaction[]> {
+  try {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(`
+        id, order_id, buyer_user_id, beneficiary_user_id, transaction_type, 
+        amount, utr_number, payment_status, zap_key_used, created_at,
+        buyer:buyer_user_id ( full_name, email ),
+        beneficiary:beneficiary_user_id ( full_name, email )
+      `)
+      .eq('beneficiary_user_id', userId)
+      .eq('payment_status', 'SUCCESS')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (!error && data && Array.isArray(data)) {
+      return data as unknown as Transaction[];
+    }
+  } catch (err: any) {
+    console.error('getUserIncomeTransactions exception:', err);
+  }
+  return [];
+}
+
 // Helper: Calculate current calendar month earnings (1st of month at 00:00 to month end)
 export async function getUserCalendarMonthEarned(userId: string): Promise<number> {
   try {
@@ -796,15 +834,12 @@ export async function saveUserMerchantKey(
 ): Promise<{ success: boolean; message?: string }> {
   try {
     const cleanKey = zapKey.trim();
-
-    // 1. Web Crypto API se SHA-256 Hash create karein
     const msgBuffer = new TextEncoder().encode(cleanKey);
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
     const zapKeyHash = Array.from(new Uint8Array(hashBuffer))
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
 
-    // 2. Existing key count for priority_order
     const { count } = await supabase
       .from('user_merchant_keys')
       .select('id', { count: 'exact', head: true })
@@ -812,17 +847,16 @@ export async function saveUserMerchantKey(
 
     const priorityOrder = (count ?? 0) + 1;
 
-    // 3. Database insert with zap_key_hash
     const { error: insErr } = await supabase
       .from('user_merchant_keys')
       .insert({
         user_id: userId,
         zap_key: cleanKey,
-        zap_key_hash: zapKeyHash, // <-- Stored for quick verification & indexing
+        zap_key_hash: zapKeyHash,
         paytm_merchant_name: merchantName?.trim() || null,
         priority_order: priorityOrder,
         is_active: true,
-        monthly_limit: 75000.00,
+        monthly_limit: null, // <-- 75000.00 hat gaya (Unlimited)
         monthly_received_amount: 0.00
       });
 

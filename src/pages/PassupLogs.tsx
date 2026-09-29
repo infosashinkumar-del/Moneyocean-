@@ -123,7 +123,7 @@ export const PassupLogs: React.FC = () => {
             <thead className="bg-[#050811] text-slate-400 font-mono uppercase tracking-wider text-[10px] border-b border-slate-800">
               <tr>
                 <th className="py-3.5 px-4">Sale Number</th>
-                <th className="py-3.5 px-4">Passed-Up Sale (Member)</th>
+                <th className="py-3.5 px-4">Member Name (Passed Sale)</th>
                 <th className="py-3.5 px-4">Amount</th>
                 <th className="py-3.5 px-4">Pass-Up Trigger Reason</th>
                 <th className="py-3.5 px-4">Original Referrer</th>
@@ -162,20 +162,20 @@ export const PassupLogs: React.FC = () => {
                       {/* Passed-Up Sale Member Name */}
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center shrink-0 shadow-sm">
-                            <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+                          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-600/10 border border-emerald-500/30 flex items-center justify-center shrink-0 shadow-sm">
+                            <UserCheck className="w-4 h-4 text-emerald-400" />
                           </div>
                           <div>
-                            <span className="font-bold text-white block text-xs">
+                            <span className="font-bold text-white block text-sm tracking-tight">
                               {log.buyer_name || 'Member Sale'}
                             </span>
                             {log.buyer_referral_code ? (
-                              <span className="text-[10px] font-mono text-amber-300/80 block">
-                                ID: {log.buyer_referral_code}
+                              <span className="text-[10px] font-mono text-emerald-400/90 font-medium block">
+                                ID: #{log.buyer_referral_code}
                               </span>
                             ) : (
                               <span className="text-[10px] font-mono text-slate-500 block">
-                                Sale Qualified
+                                Verified Sale
                               </span>
                             )}
                           </div>

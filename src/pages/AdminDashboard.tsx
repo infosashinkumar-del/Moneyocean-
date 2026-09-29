@@ -262,20 +262,19 @@ export const AdminDashboard: React.FC = () => {
       {/* New Leader Seeder Component */}
       <AdminLeaderSeederCard onComplete={fetchAdminData} />
 
-      {/* Merchant ZapKey Limit Monitor */}
+      {/* Merchant ZapKey Volume Monitor (Unlimited Load Balancing) */}
       <div className="p-6 rounded-3xl bg-[#091122]/70 backdrop-blur-xl border border-emerald-500/15 shadow-xl space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Key className="w-5 h-5 text-emerald-400" />
             <h3 className="text-lg font-bold font-display text-white">
-              Merchant ZapKey Volume Monitor (Monthly Limit: ₹75,000)
+              Merchant ZapKey Load Balancing Monitor (Unlimited Volume)
             </h3>
           </div>
           <span className="text-xs font-mono text-slate-400">
             {merchantKeysList.length} Active Keys Tracked
           </span>
         </div>
-
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-300">
             <thead className="bg-[#050811] text-slate-400 font-mono uppercase tracking-wider text-[10px] border-b border-slate-800">
@@ -284,7 +283,7 @@ export const AdminDashboard: React.FC = () => {
                 <th className="py-3 px-4">Referral Code</th>
                 <th className="py-3 px-4">ZapKey</th>
                 <th className="py-3 px-4">Monthly Received</th>
-                <th className="py-3 px-4">Limit Utilization</th>
+                <th className="py-3 px-4">Routing Strategy</th>
                 <th className="py-3 px-4">Key Status</th>
               </tr>
             </thead>
@@ -295,10 +294,7 @@ export const AdminDashboard: React.FC = () => {
                 </tr>
               ) : (
                 merchantKeysList.map((key) => {
-                  const limit = Number(key.monthly_limit || 0);
                   const rec = Number(key.monthly_received_amount || 0);
-                  const pct = limit > 0 ? Math.min(100, Math.round((rec / limit) * 100)) : 0;
-
                   return (
                     <tr key={key.id} className="hover:bg-[#091122]/50">
                       <td className="py-3.5 px-4 font-sans font-bold text-white">
@@ -308,21 +304,16 @@ export const AdminDashboard: React.FC = () => {
                         #{key.user?.referral_code || 'MASTER'}
                       </td>
                       <td className="py-3.5 px-4 text-slate-400">
-                        {key.zap_key?.substring(0, 14)}
+                        {key.zap_key?.substring(0, 14)}...
                       </td>
                       <td className="py-3.5 px-4 font-bold text-emerald-400 font-sans">
-                        ₹{rec.toLocaleString('en-IN')} / ₹{limit.toLocaleString('en-IN')}
+                        ₹{rec.toLocaleString('en-IN')}
                       </td>
-                      <td className="py-3.5 px-4 w-44">
-                        <div className="w-full bg-[#050811] h-2 rounded-full overflow-hidden border border-slate-800">
-                          <div
-                            className={`h-full rounded-full ${
-                              pct > 85 ? 'bg-rose-500' : pct > 50 ? 'bg-amber-500' : 'bg-emerald-500'
-                            }`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-slate-400">{pct}% used</span>
+                      <td className="py-3.5 px-4">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e1726] border border-cyan-500/30 text-cyan-300 text-[10px] font-mono">
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                          <span>Load Balanced (Lowest Received First)</span>
+                        </span>
                       </td>
                       <td className="py-3.5 px-4">
                         {key.is_active ? (

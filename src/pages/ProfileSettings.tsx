@@ -243,7 +243,8 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 
   const activeKeys = merchantKeys.filter(k => k.is_active);
   const totalMonthlyVolume = merchantKeys.reduce((acc, k) => acc + Number(k.monthly_received_amount || 0), 0);
-  const totalCombinedLimit = merchantKeys.reduce((acc, k) => acc + Number(k.monthly_limit || 75000), 0);
+  const totalCombinedLimit = merchantKeys.reduce((acc, k) => acc + (k.monthly_limit ? Number(k.monthly_limit) : 0), 0);
+  const isAnyLimitActive = merchantKeys.some(k => k.monthly_limit !== null && k.monthly_limit !== undefined && Number(k.monthly_limit) > 0);
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto p-4 sm:p-8">
@@ -343,10 +344,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 </div>
                 <div className="space-y-0.5">
                   <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">
-                    Total Capacity
+                    Capacity Model
                   </span>
                   <p className="text-sm sm:text-base font-bold font-mono text-amber-300">
-                    ₹{totalCombinedLimit.toLocaleString('en-IN')}
+                    {isAnyLimitActive ? `₹${totalCombinedLimit.toLocaleString('en-IN')}` : 'Unlimited Volume'}
                   </p>
                 </div>
               </div>
@@ -481,9 +482,9 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               )}
 
               {merchantKeys.map((key) => {
-                const limit = Number(key.monthly_limit || 75000);
+                const limit = key.monthly_limit !== null && key.monthly_limit !== undefined ? Number(key.monthly_limit) : null;
                 const received = Number(key.monthly_received_amount || 0);
-                const percent = limit > 0 ? Math.min(100, Math.round((received / limit) * 100)) : 0;
+                const percent = limit && limit > 0 ? Math.min(100, Math.round((received / limit) * 100)) : null;
 
                 return (
                   <div
@@ -504,8 +505,12 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                       <div className="text-xs font-mono text-slate-400">
                         {maskZapKey(key.zap_key)}
                       </div>
-                      <div className="text-[11px] text-slate-500 font-mono">
-                        Monthly: ₹{received.toLocaleString('en-IN')} / ₹{limit.toLocaleString('en-IN')} ({percent}% used)
+                      <div className="text-[11px] text-slate-400 font-mono">
+                        {limit ? (
+                          `Monthly: ₹${received.toLocaleString('en-IN')} / ₹${limit.toLocaleString('en-IN')} (${percent}% used)`
+                        ) : (
+                          `Monthly Received: ₹${received.toLocaleString('en-IN')} (Unlimited Load Balancing)`
+                        )}
                       </div>
                     </div>
 

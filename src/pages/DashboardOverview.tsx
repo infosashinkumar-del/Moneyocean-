@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Banknote, 
   CalendarDays, 
@@ -25,11 +25,14 @@ import {
   Layers,
   Activity,
   UserCheck,
-  Percent
+  Percent,
+  BarChart3
 } from 'lucide-react';
 import { 
   AreaChart, 
   Area, 
+  BarChart,
+  Bar,
   XAxis, 
   YAxis, 
   CartesianGrid, 
@@ -44,6 +47,7 @@ import { showToast } from '../components/Toast';
 import { 
   getLiveReferralUrl, 
   getUserTransactions, 
+  getUserIncomeTransactions,
   getUserCalendarMonthEarned, 
   getUserIncomeOriginBreakdown 
 } from '../lib/supabase';
@@ -53,6 +57,56 @@ interface DashboardOverviewProps {
   onNavigateTab: (tab: string) => void;
   onNavigateCheckout: () => void;
 }
+
+const CustomChartTooltip: React.FC<any> = ({ active, payload }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="p-4 rounded-2xl bg-[#070b14]/95 border border-amber-500/30 shadow-2xl backdrop-blur-xl space-y-2.5 min-w-[210px] z-50">
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
+          <span className="text-[11px] font-mono text-slate-300 font-bold">{data.fullDate || data.dayLabel}</span>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 font-bold">
+            {data.salesCount || 0} {data.salesCount === 1 ? 'Sale' : 'Sales'}
+          </span>
+        </div>
+        <div className="space-y-1.5 font-mono">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-400 flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_#f59e0b]" />
+              <span className="font-semibold text-white">Total Payout:</span>
+            </span>
+            <span className="font-bold text-amber-300 text-sm">
+              ₹{Number(data.total).toLocaleString('en-IN')}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-800/50">
+            <span className="text-slate-400 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]" />
+              <span>Direct 100%:</span>
+            </span>
+            <span className="text-emerald-300 font-semibold">
+              ₹{Number(data.direct).toLocaleString('en-IN')}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-slate-400 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_6px_#06b6d4]" />
+              <span>2-Up Pass-Up:</span>
+            </span>
+            <span className="text-cyan-300 font-semibold">
+              ₹{Number(data.passup).toLocaleString('en-IN')}
+            </span>
+          </div>
+        </div>
+        <div className="text-[9px] text-slate-400 pt-1.5 border-t border-slate-800/50 flex items-center gap-1.5 font-mono">
+          <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+          <span>Real-time Bank UPI Settlement</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onNavigateTab,
@@ -68,6 +122,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const [loadingTx, setLoadingTx] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Enhanced Earning Graph State
+  const [chartTimeframe, setChartTimeframe] = useState<'7D' | '14D' | '30D' | 'MTD'>('7D');
+  const [chartType, setChartType] = useState<'area' | 'bar'>('area');
+  const [chartMetric, setChartMetric] = useState<'all' | 'direct' | 'passup'>('all');
+  const [incomeTransactions, setIncomeTransactions] = useState<Transaction[]>([]);
+  const [loadingChartTx, setLoadingChartTx] = useState(false);
+
   const referralUrl = user ? getLiveReferralUrl(user.referral_code) : '';
 
   useEffect(() => {
@@ -75,8 +136,22 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       loadRecentTx();
       loadCalendarMonthEarned();
       loadIncomeOriginBreakdown();
+      loadChartTransactions();
     }
   }, [user]);
+
+  const loadChartTransactions = async () => {
+    if (!user?.id) return;
+    setLoadingChartTx(true);
+    try {
+      const txs = await getUserIncomeTransactions(user.id, 200);
+      setIncomeTransactions(txs);
+    } catch (err) {
+      console.warn('Error loading chart transactions:', err);
+    } finally {
+      setLoadingChartTx(false);
+    }
+  };
 
   const loadRecentTx = async () => {
     if (!user?.id) return;
@@ -118,7 +193,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       refreshUserData(), 
       loadRecentTx(), 
       loadCalendarMonthEarned(),
-      loadIncomeOriginBreakdown()
+      loadIncomeOriginBreakdown(),
+      loadChartTransactions()
     ]);
     setRefreshing(false);
     showToast('info', 'Synced', 'Dashboard stats updated with live blockchain ledger.');
@@ -160,15 +236,123 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   // Qualification Status (3 direct sales required: 1st & 3rd pass-up, 2nd kept => Qualified)
   const isQualified = directCount >= 3;
 
-  const chartData = [
-    { name: 'Day -6', income: Math.round(last7DaysIncome * 0.08) },
-    { name: 'Day -5', income: Math.round(last7DaysIncome * 0.12) },
-    { name: 'Day -4', income: Math.round(last7DaysIncome * 0.15) },
-    { name: 'Day -3', income: Math.round(last7DaysIncome * 0.10) },
-    { name: 'Day -2', income: Math.round(last7DaysIncome * 0.20) },
-    { name: 'Yesterday', income: Math.max(0, Math.round(last7DaysIncome * 0.35) - Number(todayIncome)) },
-    { name: 'Today', income: Number(todayIncome) }
-  ];
+  const chartData = useMemo(() => {
+    const points: Array<{
+      dateKey: string;
+      dayLabel: string;
+      fullDate: string;
+      total: number;
+      direct: number;
+      passup: number;
+      salesCount: number;
+      directCount: number;
+      passupCount: number;
+    }> = [];
+
+    const now = new Date();
+    let daysCount = 7;
+    if (chartTimeframe === '14D') daysCount = 14;
+    else if (chartTimeframe === '30D') daysCount = 30;
+    else if (chartTimeframe === 'MTD') {
+      daysCount = Math.max(1, now.getDate());
+    }
+
+    // Map existing incoming transactions by local YYYY-MM-DD
+    const txMap = new Map<string, { direct: number; passup: number; directCount: number; passupCount: number }>();
+    (incomeTransactions || []).forEach(tx => {
+      if (tx.payment_status !== 'SUCCESS') return;
+      const d = new Date(tx.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const curr = txMap.get(key) || { direct: 0, passup: 0, directCount: 0, passupCount: 0 };
+      const amt = Number(tx.amount || 0);
+      const isDirect = tx.transaction_type === 'DIRECT_REFERRAL_100PCT';
+      if (isDirect) {
+        curr.direct += amt;
+        curr.directCount += 1;
+      } else {
+        curr.passup += amt;
+        curr.passupCount += 1;
+      }
+      txMap.set(key, curr);
+    });
+
+    for (let i = daysCount - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+      const dayData = txMap.get(key) || { direct: 0, passup: 0, directCount: 0, passupCount: 0 };
+      const total = dayData.direct + dayData.passup;
+      const salesCount = dayData.directCount + dayData.passupCount;
+
+      const dayLabel = i === 0 
+        ? 'Today' 
+        : i === 1 
+        ? 'Yesterday' 
+        : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+      const fullDate = d.toLocaleDateString('en-IN', { 
+        weekday: 'short', 
+        day: 'numeric', 
+        month: 'short', 
+        year: 'numeric' 
+      });
+
+      points.push({
+        dateKey: key,
+        dayLabel,
+        fullDate,
+        total,
+        direct: dayData.direct,
+        passup: dayData.passup,
+        salesCount,
+        directCount: dayData.directCount,
+        passupCount: dayData.passupCount
+      });
+    }
+
+    // Safety fallback: if no transactions in raw table yet but user has today/last_7_days income
+    const hasAnyInMap = points.some(p => p.total > 0);
+    if (!hasAnyInMap && (Number(todayIncome) > 0 || Number(last7DaysIncome) > 0)) {
+      if (points.length > 0) {
+        const tVal = Number(todayIncome);
+        points[points.length - 1].total = tVal;
+        points[points.length - 1].direct = tVal;
+        points[points.length - 1].salesCount = Math.max(1, Math.round(tVal / (unitPrice || 500)));
+      }
+    }
+
+    return points;
+  }, [incomeTransactions, chartTimeframe, todayIncome, last7DaysIncome, unitPrice]);
+
+  const periodStats = useMemo(() => {
+    const total = chartData.reduce((acc, curr) => acc + curr.total, 0);
+    const directTotal = chartData.reduce((acc, curr) => acc + curr.direct, 0);
+    const passupTotal = chartData.reduce((acc, curr) => acc + curr.passup, 0);
+    const totalSales = chartData.reduce((acc, curr) => acc + curr.salesCount, 0);
+    const directSales = chartData.reduce((acc, curr) => acc + curr.directCount, 0);
+    const passupSales = chartData.reduce((acc, curr) => acc + curr.passupCount, 0);
+    
+    const dailyAverage = chartData.length > 0 ? Math.round(total / chartData.length) : 0;
+    
+    let peak = chartData[0];
+    chartData.forEach(p => {
+      if (p.total > (peak?.total || 0)) {
+        peak = p;
+      }
+    });
+
+    return {
+      total,
+      directTotal,
+      passupTotal,
+      totalSales,
+      directSales,
+      passupSales,
+      dailyAverage,
+      peakDay: peak && peak.total > 0 ? peak : null
+    };
+  }, [chartData]);
 
   return (
     <div className="space-y-7 max-w-7xl mx-auto p-3 sm:p-6 lg:p-8">
@@ -306,63 +490,342 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
       {/* Main Grid: Earnings Chart (2 cols) & Income Breakdown Snapshot (1 col) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
-        {/* Earnings Trend Chart */}
-        <div className="lg:col-span-2 p-6 rounded-3xl bg-[#0c1017]/90 backdrop-blur-xl border border-[#1c2436] shadow-xl space-y-5">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        {/* Earnings Velocity & Inflow Analytics (2 cols) */}
+        <div className="lg:col-span-2 p-5 sm:p-7 rounded-3xl bg-gradient-to-br from-[#0c1017]/95 via-[#080d16] to-[#050811] backdrop-blur-xl border border-amber-500/25 shadow-2xl space-y-6 relative overflow-hidden">
+          {/* Subtle Ambient Glow */}
+          <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Header & Controls Bar */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800/70 pb-4 relative z-10">
             <div>
-              <h3 className="text-lg font-bold font-display text-white flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-[#e5a93c]" />
-                <span>Earnings Velocity Trend (INR)</span>
-              </h3>
-              <p className="text-xs text-slate-400">Past 7 days income activity from direct & pass-up sales</p>
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <TrendingUp className="w-4 h-4 text-amber-400" />
+                </div>
+                <h3 className="text-lg sm:text-xl font-bold font-display text-white tracking-tight">
+                  Earnings Velocity & Settlement Graph
+                </h3>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Real-time daily incoming payouts from Direct P2P & 2-Up Pass-Up streams
+              </p>
+            </div>
+
+            {/* Interactive Control Cluster: Timeframe & Chart Style */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Timeframe Selector Segmented Buttons */}
+              <div className="flex items-center p-1 rounded-xl bg-[#050811] border border-slate-800 text-xs font-mono">
+                {(['7D', '14D', '30D', 'MTD'] as const).map(tf => (
+                  <button
+                    key={tf}
+                    type="button"
+                    onClick={() => setChartTimeframe(tf)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      chartTimeframe === tf
+                        ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+
+              {/* Chart Type Toggle: Area vs Bar */}
+              <div className="flex items-center p-1 rounded-xl bg-[#050811] border border-slate-800 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setChartType('area')}
+                  title="Smooth Spline Area Chart"
+                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                    chartType === 'area'
+                      ? 'bg-[#1b273d] text-amber-400 border border-amber-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Activity className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartType('bar')}
+                  title="Rounded Pillars Bar Chart"
+                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+                    chartType === 'bar'
+                      ? 'bg-[#1b273d] text-amber-400 border border-amber-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="h-64 sm:h-72 w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#e5a93c" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#e5a93c" stopOpacity={0.0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#152030" vertical={false} />
-                <XAxis 
-                  dataKey="name" 
-                  stroke="#64748b" 
-                  fontSize={11} 
-                  tickLine={false} 
-                  axisLine={false} 
-                />
-                <YAxis 
-                  stroke="#64748b" 
-                  fontSize={11} 
-                  tickLine={false} 
-                  axisLine={false} 
-                  tickFormatter={(val) => `₹${val}`}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#0b0f17', 
-                    borderColor: '#e5a93c', 
-                    borderRadius: '12px',
-                    color: '#fff',
-                    fontSize: '12px',
-                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)'
-                  }}
-                  formatter={(value: any) => [`₹${Number(value).toLocaleString('en-IN')}`, 'Income']}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="income" 
-                  stroke="#e5a93c" 
-                  strokeWidth={3} 
-                  fillOpacity={1} 
-                  fill="url(#incomeGradient)" 
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          {/* KPI Strip: Period Payout, Direct, Pass-Up, Peak Day */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 relative z-10">
+            {/* Metric 1: Total Period Income */}
+            <div className="p-3.5 rounded-2xl bg-[#070b14]/80 border border-amber-500/20 space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block">
+                Period Payout ({chartTimeframe})
+              </span>
+              <div className="text-lg sm:text-xl font-bold font-display text-white truncate">
+                ₹{periodStats.total.toLocaleString('en-IN')}
+              </div>
+              <span className="text-[10px] font-mono text-emerald-400 block">
+                {periodStats.totalSales} {periodStats.totalSales === 1 ? 'sale settled' : 'sales settled'}
+              </span>
+            </div>
+
+            {/* Metric 2: Direct 100% */}
+            <div className="p-3.5 rounded-2xl bg-[#070b14]/80 border border-emerald-500/20 space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block">
+                Direct 100% P2P
+              </span>
+              <div className="text-lg sm:text-xl font-bold font-display text-emerald-400 truncate">
+                ₹{periodStats.directTotal.toLocaleString('en-IN')}
+              </div>
+              <span className="text-[10px] font-mono text-slate-400 block">
+                {periodStats.directSales} direct sales
+              </span>
+            </div>
+
+            {/* Metric 3: 2-Up Pass-Up */}
+            <div className="p-3.5 rounded-2xl bg-[#070b14]/80 border border-cyan-500/20 space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block">
+                Passive Pass-Up
+              </span>
+              <div className="text-lg sm:text-xl font-bold font-display text-cyan-400 truncate">
+                ₹{periodStats.passupTotal.toLocaleString('en-IN')}
+              </div>
+              <span className="text-[10px] font-mono text-slate-400 block">
+                {periodStats.passupSales} pass-up inflows
+              </span>
+            </div>
+
+            {/* Metric 4: Peak Single Day */}
+            <div className="p-3.5 rounded-2xl bg-[#070b14]/80 border border-purple-500/20 space-y-1">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block">
+                Peak Single Day
+              </span>
+              <div className="text-lg sm:text-xl font-bold font-display text-purple-300 truncate">
+                {periodStats.peakDay ? `₹${periodStats.peakDay.total.toLocaleString('en-IN')}` : '₹0'}
+              </div>
+              <span className="text-[10px] font-mono text-slate-400 block truncate">
+                {periodStats.peakDay ? periodStats.peakDay.dayLabel : 'No sales yet'}
+              </span>
+            </div>
+          </div>
+
+          {/* Series Filter Selector: All / Direct / Pass-Up */}
+          <div className="flex items-center justify-between gap-3 text-xs pt-1 relative z-10">
+            <div className="flex items-center gap-1.5 font-mono">
+              <span className="text-[11px] text-slate-400">Stream Filter:</span>
+              <div className="inline-flex p-0.5 rounded-lg bg-[#050811] border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setChartMetric('all')}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    chartMetric === 'all'
+                      ? 'bg-[#1c273e] text-amber-300 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  All Streams
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMetric('direct')}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    chartMetric === 'direct'
+                      ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Direct Only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMetric('passup')}
+                  className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                    chartMetric === 'passup'
+                      ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Pass-Up Only
+                </button>
+              </div>
+            </div>
+
+            {/* Live Chart Legend */}
+            <div className="hidden sm:flex items-center gap-4 text-[11px] font-mono text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_#f59e0b]" />
+                <span className="text-slate-300">Total Payout</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981]" />
+                <span className="text-slate-300">Direct 100%</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#06b6d4]" />
+                <span className="text-slate-300">Pass-Up</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Graph Body */}
+          <div className="h-72 sm:h-80 w-full pt-2 relative z-10">
+            {loadingChartTx ? (
+              <div className="h-full flex flex-col items-center justify-center gap-2 text-slate-400 font-mono text-xs">
+                <RefreshCw className="w-6 h-6 animate-spin text-amber-400" />
+                <span>Aggregating daily incoming ledger...</span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                {chartType === 'area' ? (
+                  <AreaChart data={chartData} margin={{ top: 12, right: 12, left: -15, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="areaGold" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.45} />
+                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="areaEmerald" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.45} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="areaCyan" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.45} />
+                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#162032" vertical={false} />
+                    <XAxis 
+                      dataKey="dayLabel" 
+                      stroke="#64748b" 
+                      fontSize={11} 
+                      tickLine={false} 
+                      axisLine={false} 
+                    />
+                    <YAxis 
+                      stroke="#64748b" 
+                      fontSize={11} 
+                      tickLine={false} 
+                      axisLine={false} 
+                      tickFormatter={(val) => `₹${val.toLocaleString('en-IN')}`}
+                    />
+                    <Tooltip content={<CustomChartTooltip />} />
+                    {chartMetric === 'all' && (
+                      <>
+                        <Area 
+                          type="monotone" 
+                          dataKey="total" 
+                          stroke="#f59e0b" 
+                          strokeWidth={3} 
+                          fillOpacity={1} 
+                          fill="url(#areaGold)" 
+                          activeDot={{ r: 6, fill: '#f59e0b', stroke: '#ffffff', strokeWidth: 2 }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="direct" 
+                          stroke="#10b981" 
+                          strokeWidth={2} 
+                          strokeDasharray="4 4"
+                          fillOpacity={0} 
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="passup" 
+                          stroke="#06b6d4" 
+                          strokeWidth={2} 
+                          strokeDasharray="3 3"
+                          fillOpacity={0} 
+                        />
+                      </>
+                    )}
+                    {chartMetric === 'direct' && (
+                      <Area 
+                        type="monotone" 
+                        dataKey="direct" 
+                        stroke="#10b981" 
+                        strokeWidth={3} 
+                        fillOpacity={1} 
+                        fill="url(#areaEmerald)" 
+                        activeDot={{ r: 6, fill: '#10b981', stroke: '#ffffff', strokeWidth: 2 }}
+                      />
+                    )}
+                    {chartMetric === 'passup' && (
+                      <Area 
+                        type="monotone" 
+                        dataKey="passup" 
+                        stroke="#06b6d4" 
+                        strokeWidth={3} 
+                        fillOpacity={1} 
+                        fill="url(#areaCyan)" 
+                        activeDot={{ r: 6, fill: '#06b6d4', stroke: '#ffffff', strokeWidth: 2 }}
+                      />
+                    )}
+                  </AreaChart>
+                ) : (
+                  <BarChart data={chartData} margin={{ top: 12, right: 12, left: -15, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="barGold" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#b45309" stopOpacity={0.5} />
+                      </linearGradient>
+                      <linearGradient id="barEmerald" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#047857" stopOpacity={0.5} />
+                      </linearGradient>
+                      <linearGradient id="barCyan" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#0e7490" stopOpacity={0.5} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#162032" vertical={false} />
+                    <XAxis 
+                      dataKey="dayLabel" 
+                      stroke="#64748b" 
+                      fontSize={11} 
+                      tickLine={false} 
+                      axisLine={false} 
+                    />
+                    <YAxis 
+                      stroke="#64748b" 
+                      fontSize={11} 
+                      tickLine={false} 
+                      axisLine={false} 
+                      tickFormatter={(val) => `₹${val.toLocaleString('en-IN')}`}
+                    />
+                    <Tooltip content={<CustomChartTooltip />} />
+                    {chartMetric === 'all' && (
+                      <>
+                        <Bar dataKey="direct" name="Direct 100%" stackId="a" fill="url(#barEmerald)" radius={[0, 0, 4, 4]} />
+                        <Bar dataKey="passup" name="Pass-Up" stackId="a" fill="url(#barGold)" radius={[6, 6, 0, 0]} />
+                      </>
+                    )}
+                    {chartMetric === 'direct' && (
+                      <Bar dataKey="direct" name="Direct 100%" fill="url(#barEmerald)" radius={[6, 6, 0, 0]} />
+                    )}
+                    {chartMetric === 'passup' && (
+                      <Bar dataKey="passup" name="Pass-Up" fill="url(#barCyan)" radius={[6, 6, 0, 0]} />
+                    )}
+                  </BarChart>
+                )}
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Footer Ledger Guarantee */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-800/70 text-slate-400 text-xs font-mono relative z-10">
+            <div className="flex items-center gap-2 text-emerald-400">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Direct Bank Settlement Protocol Active</span>
+            </div>
+            <div className="text-slate-400 text-[11px]">
+              Daily Velocity: <strong className="text-white">₹{periodStats.dailyAverage.toLocaleString('en-IN')} / day</strong>
+            </div>
           </div>
         </div>
 
