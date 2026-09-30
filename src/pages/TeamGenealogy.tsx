@@ -51,7 +51,12 @@ export const TeamGenealogy: React.FC = () => {
       ]);
 
       setTeam(treeData || []);
-      setSettledTransactions(txData || []);
+      const cleanTx = (txData || []).filter((t: any) => {
+        const txType = String(t.transaction_type || '').toUpperCase();
+        const utr = String(t.utr_number || '').toUpperCase();
+        return !txType.includes('VIP') && !txType.includes('FREE_PASS') && !utr.startsWith('SEED_');
+      });
+      setSettledTransactions(cleanTx);
     } catch (err) {
       console.error('Data error in TeamGenealogy:', err);
     } finally {
@@ -65,38 +70,48 @@ export const TeamGenealogy: React.FC = () => {
 
   // 2. Smart Calculation: Bind real transactions & ledger attribution
   const smartMembers = useMemo(() => {
-    return team.map((member) => {
+    return team.map((member, idx) => {
       // Find real transaction for this direct member
       const myTx = settledTransactions.find(t => t.buyer_user_id === member.id);
       
-      const didIPayReceive = Boolean(
-        (myTx && myTx.beneficiary_user_id === user?.id) ||
-        (member.flowType === 'DIRECT_KEEP' && member.moneyReceived && member.moneyReceived > 0)
-      );
-      const moneyReceived = didIPayReceive 
-        ? Number(myTx?.amount || member.moneyReceived || unitPrice) 
-        : 0;
+      const rawSaleNum = myTx?.sale_number ?? member.saleNum ?? member.sale_number ?? null;
+      const computedSaleNum = (rawSaleNum && Number(rawSaleNum) > 0) ? Number(rawSaleNum) : (idx + 1);
+      const isPassUpRule = computedSaleNum === 1 || computedSaleNum === 3;
+
       const isPassedUp = Boolean(
         member.is_passup ||
         member.flowType === 'PASS_UP' ||
-        (myTx && myTx.is_passup && myTx.beneficiary_user_id !== user?.id)
+        (myTx && myTx.is_passup && myTx.beneficiary_user_id !== user?.id) ||
+        (isPassUpRule && (myTx || member.is_active))
       );
 
+      const didIPayReceive = Boolean(
+        myTx && 
+        myTx.beneficiary_user_id === user?.id && 
+        !myTx.is_passup && 
+        Number(myTx.amount) > 0
+      );
+      const moneyReceived = didIPayReceive 
+        ? Number(myTx?.amount || 0) 
+        : 0;
+
       // Downlines ki kamai jo mujhe aayi
-      const downlines = (member.children || []).map((child: any) => {
+      const downlines = (member.children || []).map((child: any, cIdx: number) => {
         const childTx = settledTransactions.find(t => t.buyer_user_id === child.id);
         const didChildPayMe = Boolean(
           child.isChildPassupToYou ||
-          (childTx && childTx.beneficiary_user_id === user?.id)
+          (childTx && childTx.beneficiary_user_id === user?.id && Number(childTx.amount) > 0)
         );
-        const childMoney = didChildPayMe ? Number(childTx?.amount || child.childMoney || unitPrice) : 0;
+        const childMoney = didChildPayMe ? Number(childTx?.amount || 0) : 0;
+        const rawChildSale = childTx?.sale_number ?? child.saleNum ?? child.sale_number ?? null;
+        const childSaleNumber = (rawChildSale && Number(rawChildSale) > 0) ? Number(rawChildSale) : (cIdx + 1);
 
         return {
           ...child,
           didChildPayMe,
           childMoney,
           utr: childTx?.utr_number || child.utr || null,
-          saleNum: childTx?.sale_number ?? child.saleNum ?? child.sale_number ?? 0
+          saleNum: childSaleNumber
         };
       });
 
@@ -110,7 +125,7 @@ export const TeamGenealogy: React.FC = () => {
         isPassedUp,
         is_passup: isPassedUp,
         flowType: isPassedUp ? ('PASS_UP' as const) : ('DIRECT_KEEP' as const),
-        saleNum: myTx?.sale_number ?? member.saleNum ?? member.sale_number ?? 0,
+        saleNum: computedSaleNum,
         utr: myTx?.utr_number || member.utr || null,
         downlines,
         totalBranchPassiveIncome
@@ -398,6 +413,16 @@ export const TeamGenealogy: React.FC = () => {
                               </span>
                               <span className="block text-[10px] text-slate-400 mt-0.5">
                                 Sale #{person.saleNum || 'Pass-Up'} Pass-Up Rule
+                              </span>
+                            </div>
+                          ) : person.is_active ? (
+                            <div>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-300 bg-teal-950/70 border border-teal-500/30 px-2 py-0.5 rounded-md">
+                                <CheckCircle2 className="w-3 h-3 text-teal-400" />
+                                <span>Sale #{person.saleNum} • Active Member</span>
+                              </span>
+                              <span className="block text-[10px] text-slate-400 mt-0.5">
+                                Direct ID Verified
                               </span>
                             </div>
                           ) : (

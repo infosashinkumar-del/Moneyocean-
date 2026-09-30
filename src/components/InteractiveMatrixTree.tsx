@@ -134,11 +134,12 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
     return (currentRootNode?.children || []) as MatrixNodeData[];
   }, [currentRootNode]);
 
-  // Strict Data Ledger Verification (NO Array Indexing)
+  // Strict Data Ledger Verification with resilient fallback
   const enrichedDirects = useMemo(() => {
-    return activeChildren.map((node) => {
+    return activeChildren.map((node, index) => {
       // Prioritize database verified attributes
-      const realSaleNum = node.saleNum ?? (node as any).sale_number ?? null;
+      const rawSaleNum = node.saleNum ?? (node as any).sale_number ?? null;
+      const realSaleNum = (rawSaleNum && Number(rawSaleNum) > 0) ? Number(rawSaleNum) : (index + 1);
       const isPassUp = node.isPassedUp ?? node.is_passup ?? (realSaleNum === 1 || realSaleNum === 3);
       
       return {
@@ -518,12 +519,12 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
                                 {isPassUp ? (
                                   <>
                                     <ArrowUpRight className="w-3 h-3 text-cyan-400" />
-                                    <span>Sale #{member.saleNumber ?? 'Pass-Up'}</span>
+                                    <span>Sale #{(member.saleNumber && member.saleNumber > 0) ? member.saleNumber : 'Pass-Up'}</span>
                                   </>
                                 ) : (
                                   <>
                                     <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                    <span>Sale #{member.saleNumber ?? 'Kept'}</span>
+                                    <span>Sale #{(member.saleNumber && member.saleNumber > 0) ? member.saleNumber : 'Kept'}</span>
                                   </>
                                 )}
                               </span>

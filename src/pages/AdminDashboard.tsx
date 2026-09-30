@@ -90,7 +90,13 @@ export const AdminDashboard: React.FC = () => {
           .order('created_at', { ascending: false })
           .limit(20);
         if (!txErr && txData && Array.isArray(txData)) {
-          setGlobalTransactions(txData);
+          const filtered = txData.filter((t: any) => {
+            const txType = String(t.transaction_type || '').toUpperCase();
+            const orderId = String(t.order_id || '').toUpperCase();
+            const utr = String(t.utr_number || '').toUpperCase();
+            return !txType.includes('VIP') && !txType.includes('FREE_PASS') && !orderId.includes('VIP_SEED') && !utr.startsWith('SEED_');
+          });
+          setGlobalTransactions(filtered);
         } else {
           setGlobalTransactions([]);
         }

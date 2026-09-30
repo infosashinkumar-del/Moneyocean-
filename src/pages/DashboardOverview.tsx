@@ -261,6 +261,23 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     const txMap = new Map<string, { direct: number; passup: number; directCount: number; passupCount: number }>();
     (incomeTransactions || []).forEach(tx => {
       if (tx.payment_status !== 'SUCCESS') return;
+
+      // Filter out VIP Admin Seed / Free promotional seed transactions
+      const txType = String(tx.transaction_type || '').toUpperCase();
+      const orderId = String(tx.order_id || '').toUpperCase();
+      const utr = String(tx.utr_number || '').toUpperCase();
+      const zapKey = String(tx.zap_key_used || '').toUpperCase();
+      if (
+        txType.includes('VIP') || 
+        txType.includes('SEED') || 
+        txType.includes('FREE_PASS') ||
+        orderId.includes('VIP_SEED') || 
+        utr.startsWith('SEED_') || 
+        zapKey.includes('ADMIN_')
+      ) {
+        return;
+      }
+
       const d = new Date(tx.created_at);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       const curr = txMap.get(key) || { direct: 0, passup: 0, directCount: 0, passupCount: 0 };
@@ -983,7 +1000,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1c2436] font-mono">
-                {recentTransactions.map((tx) => {
+                {recentTransactions
+                  .filter((tx) => {
+                    const txType = String(tx.transaction_type || '').toUpperCase();
+                    const orderId = String(tx.order_id || '').toUpperCase();
+                    const utr = String(tx.utr_number || '').toUpperCase();
+                    return !txType.includes('VIP') && !txType.includes('FREE_PASS') && !orderId.includes('VIP_SEED') && !utr.startsWith('SEED_');
+                  })
+                  .map((tx) => {
                   const isPassup = tx.transaction_type?.includes('PASSUP') || tx.transaction_type?.includes('Pass');
                   return (
                     <tr key={tx.id || tx.order_id} className="hover:bg-[#121824]/80 transition-colors">

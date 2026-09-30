@@ -619,6 +619,20 @@ export async function getUserPassupLogs(p_user_id: string): Promise<PassupLog[]>
 
       if (txList && txList.length > 0) {
         for (const t of txList as any[]) {
+          const txType = String(t.transaction_type || '').toUpperCase();
+          const orderId = String(t.order_id || '').toUpperCase();
+          const utr = String(t.utr_number || '').toUpperCase();
+          const zapKey = String(t.zap_key_used || '').toUpperCase();
+          if (
+            txType.includes('VIP') || 
+            txType.includes('FREE_PASS') || 
+            orderId.includes('VIP_SEED') || 
+            utr.startsWith('SEED_') || 
+            zapKey.includes('ADMIN_')
+          ) {
+            continue;
+          }
+
           const isPassup = Boolean(t.is_passup || (t.transaction_type && t.transaction_type !== 'DIRECT_REFERRAL_100PCT'));
           if (!isPassup) continue;
 
@@ -654,18 +668,23 @@ export async function getUserPassupLogs(p_user_id: string): Promise<PassupLog[]>
       p_user_id
     });
     if (!rpcErr && rpcData && Array.isArray(rpcData)) {
-      return rpcData.map((l: any) => ({
-        sale_number: Number(l.sale_number || 1),
-        amount: Number(l.amount || 0),
-        passup_reason: l.passup_reason || 'PASSUP_QUALIFICATION',
-        buyer_name: l.buyer_name || 'Member Sale',
-        buyer_referral_code: l.buyer_referral_code || null,
-        original_referrer_name: l.original_referrer_name || 'Direct Sponsor',
-        original_referrer_code: l.original_referrer_code || null,
-        passed_to_name: l.passed_to_name || 'Qualifying Sponsor',
-        passed_to_code: l.passed_to_code || null,
-        date: l.date || l.created_at || new Date().toISOString()
-      }));
+      return rpcData
+        .filter((l: any) => {
+          const r = String(l.passup_reason || '').toUpperCase();
+          return !r.includes('VIP') && !r.includes('FREE_PASS') && !r.includes('SEED');
+        })
+        .map((l: any) => ({
+          sale_number: Number(l.sale_number || 1),
+          amount: Number(l.amount || 0),
+          passup_reason: l.passup_reason || 'PASSUP_QUALIFICATION',
+          buyer_name: l.buyer_name || 'Member Sale',
+          buyer_referral_code: l.buyer_referral_code || null,
+          original_referrer_name: l.original_referrer_name || 'Direct Sponsor',
+          original_referrer_code: l.original_referrer_code || null,
+          passed_to_name: l.passed_to_name || 'Qualifying Sponsor',
+          passed_to_code: l.passed_to_code || null,
+          date: l.date || l.created_at || new Date().toISOString()
+        }));
     }
   } catch (err: any) {
     console.error('Passup logs error:', err);
@@ -706,11 +725,19 @@ export async function getUserTransactions(userId: string, limit = 20): Promise<T
         beneficiary:beneficiary_user_id ( full_name, email )
       `)
       .or(`buyer_user_id.eq.${userId},beneficiary_user_id.eq.${userId}`)
+      .neq('transaction_type', 'ADMIN_VIP_SPONSORED_FREE_PASS')
+      .not('order_id', 'ilike', 'VIP_SEED_%')
       .order('created_at', { ascending: false })
       .limit(limit);
 
     if (!error && data && Array.isArray(data)) {
-      return data as unknown as Transaction[];
+      return (data as unknown as Transaction[]).filter(tx => {
+        const txType = String(tx.transaction_type || '').toUpperCase();
+        const orderId = String(tx.order_id || '').toUpperCase();
+        const utr = String(tx.utr_number || '').toUpperCase();
+        const zapKey = String(tx.zap_key_used || '').toUpperCase();
+        return !txType.includes('VIP') && !txType.includes('FREE_PASS') && !orderId.includes('VIP_SEED') && !utr.startsWith('SEED_') && !zapKey.includes('ADMIN_');
+      });
     }
     if (error) {
       console.warn('getUserTransactions error:', error.message);
@@ -734,11 +761,19 @@ export async function getUserIncomeTransactions(userId: string, limit = 200): Pr
       `)
       .eq('beneficiary_user_id', userId)
       .eq('payment_status', 'SUCCESS')
+      .neq('transaction_type', 'ADMIN_VIP_SPONSORED_FREE_PASS')
+      .not('order_id', 'ilike', 'VIP_SEED_%')
       .order('created_at', { ascending: false })
       .limit(limit);
 
     if (!error && data && Array.isArray(data)) {
-      return data as unknown as Transaction[];
+      return (data as unknown as Transaction[]).filter(tx => {
+        const txType = String(tx.transaction_type || '').toUpperCase();
+        const orderId = String(tx.order_id || '').toUpperCase();
+        const utr = String(tx.utr_number || '').toUpperCase();
+        const zapKey = String(tx.zap_key_used || '').toUpperCase();
+        return !txType.includes('VIP') && !txType.includes('FREE_PASS') && !orderId.includes('VIP_SEED') && !utr.startsWith('SEED_') && !zapKey.includes('ADMIN_');
+      });
     }
   } catch (err: any) {
     console.error('getUserIncomeTransactions exception:', err);
@@ -755,14 +790,22 @@ export async function getUserCalendarMonthEarned(userId: string): Promise<number
 
     const { data, error } = await supabase
       .from('transactions')
-      .select('amount')
+      .select('amount, transaction_type, order_id, utr_number, zap_key_used')
       .eq('beneficiary_user_id', userId)
       .eq('payment_status', 'SUCCESS')
       .neq('transaction_type', 'ADMIN_VIP_SPONSORED_FREE_PASS') // Free seed ko earning me mat jodo
       .gte('created_at', startOfMonth);
 
     if (!error && data && Array.isArray(data)) {
-      return data.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+      return data
+        .filter(row => {
+          const txType = String(row.transaction_type || '').toUpperCase();
+          const orderId = String(row.order_id || '').toUpperCase();
+          const utr = String(row.utr_number || '').toUpperCase();
+          const zapKey = String(row.zap_key_used || '').toUpperCase();
+          return !txType.includes('VIP') && !txType.includes('FREE_PASS') && !orderId.includes('VIP_SEED') && !utr.startsWith('SEED_') && !zapKey.includes('ADMIN_');
+        })
+        .reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
     }
   } catch (err) {
     console.warn('getUserCalendarMonthEarned error:', err);
@@ -785,8 +828,21 @@ export async function getUserIncomeOriginBreakdown(userId: string): Promise<{ di
       let passivePassupEarned = 0;
 
       for (const row of data) {
-        const amount = Number(row.amount) || 0;
         const txType = String(row.transaction_type || '').toUpperCase();
+        const orderId = String(row.order_id || '').toUpperCase();
+        const utr = String(row.utr_number || '').toUpperCase();
+        const zapKey = String(row.zap_key_used || '').toUpperCase();
+        if (
+          txType.includes('VIP') || 
+          txType.includes('FREE_PASS') || 
+          orderId.includes('VIP_SEED') || 
+          utr.startsWith('SEED_') || 
+          zapKey.includes('ADMIN_')
+        ) {
+          continue;
+        }
+
+        const amount = Number(row.amount) || 0;
         const isPassup = Boolean(row.is_passup);
 
         if (isPassup || txType.includes('PASSUP')) {
@@ -945,14 +1001,15 @@ export async function getNodeDownlines(nodeId: string): Promise<any[]> {
     const allLedger = ledgerRecords || [];
     const subList = subDirects || [];
 
-    return directs.map(member => {
+    return directs.map((member, idx) => {
       // Find direct transaction and ledger for this member
       const memberTx = allTx.find(t => t.buyer_user_id === member.id);
       const memberLedger = allLedger.find(l => l.buyer_user_id === member.id);
       const memberPassup = allPassups.find(p => p.original_referrer_id === nodeId && (p.sale_number === memberTx?.sale_number || p.sale_number === memberLedger?.sale_number));
 
-      // Real sale number from sale_ledger, transaction, or passup log (NOT frontend array indexing)
-      const sale_number = memberLedger?.sale_number ?? memberTx?.sale_number ?? memberPassup?.sale_number ?? null;
+      // Real sale number from sale_ledger, transaction, or passup log (fallback to chronological idx + 1)
+      const rawSaleNum = memberLedger?.sale_number ?? memberTx?.sale_number ?? memberPassup?.sale_number ?? null;
+      const sale_number = (rawSaleNum && Number(rawSaleNum) > 0) ? Number(rawSaleNum) : (idx + 1);
 
       // Real pass-up verification from database
       const isPassUp = Boolean(
@@ -961,15 +1018,18 @@ export async function getNodeDownlines(nodeId: string): Promise<any[]> {
         memberTx?.transaction_type?.includes('PASSUP') || 
         (memberLedger && memberLedger.beneficiary_user_id !== nodeId) ||
         (memberTx && memberTx.beneficiary_user_id !== nodeId) ||
-        memberPassup
+        memberPassup ||
+        sale_number === 1 ||
+        sale_number === 3
       );
 
       // Level 2 children for this member
-      const memberChildren = subList.filter(s => s.sponsor_id === member.id).map(child => {
+      const memberChildren = subList.filter(s => s.sponsor_id === member.id).map((child, cIdx) => {
         const childTx = allTx.find(t => t.buyer_user_id === child.id);
         const childLedger = allLedger.find(l => l.buyer_user_id === child.id);
         const childPassup = allPassups.find(p => p.original_referrer_id === member.id && p.passed_to_id === nodeId);
-        const childSaleNumber = childLedger?.sale_number ?? childTx?.sale_number ?? (childPassup?.sale_number || null);
+        const rawChildSale = childLedger?.sale_number ?? childTx?.sale_number ?? (childPassup?.sale_number || null);
+        const childSaleNumber = (rawChildSale && Number(rawChildSale) > 0) ? Number(rawChildSale) : (cIdx + 1);
 
         // Child passed up to nodeId if beneficiary is nodeId or passup log matches
         const isChildPassupToNode = Boolean(

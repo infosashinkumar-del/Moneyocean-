@@ -396,6 +396,20 @@ async function startServer() {
 
         if (txList && txList.length > 0) {
           for (const t of txList as any[]) {
+            const txType = String(t.transaction_type || '').toUpperCase();
+            const orderId = String(t.order_id || '').toUpperCase();
+            const utr = String(t.utr_number || '').toUpperCase();
+            const zapKey = String(t.zap_key_used || '').toUpperCase();
+            if (
+              txType.includes('VIP') || 
+              txType.includes('FREE_PASS') || 
+              orderId.includes('VIP_SEED') || 
+              utr.startsWith('SEED_') || 
+              zapKey.includes('ADMIN_')
+            ) {
+              continue;
+            }
+
             const isPassup = Boolean(t.is_passup || (t.transaction_type && t.transaction_type !== 'DIRECT_REFERRAL_100PCT'));
             if (!isPassup) continue;
 
