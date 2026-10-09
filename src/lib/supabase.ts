@@ -298,7 +298,7 @@ export async function generateP2PCheckout(
           order_id: baseCheckout.order_id,
           zap_key: activeZapKey,
           beneficiary_upi: baseCheckout.payment?.upi_id || '',
-          remark: `UltraPay|${cleanCode}|${benCode}`
+          remark: `MoneyOcean|${cleanCode}|${benCode}`
         });
 
         if (zapRes && zapRes.success) {

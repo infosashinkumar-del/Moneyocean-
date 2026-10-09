@@ -191,7 +191,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
         open: true,
         type: 'SUCCESS',
         title: 'Payment Received',
-        message: `Your ₹${Number(amount).toLocaleString('en-IN')} P2P payment has been confirmed. Activating your UltraPay ID...`
+        message: `Your ₹${Number(amount).toLocaleString('en-IN')} P2P payment has been confirmed. Activating your MoneyOcean ID...`
       });
       confetti({
         particleCount: 180,
@@ -270,7 +270,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
               order_id: targetOrderId,
               amount: Number(targetAmount).toFixed(2),
               customer_mobile: user?.mobile || '',
-              remark: `UltraPay|${user?.referral_code || 'P2P'}`
+              remark: `MoneyOcean|${user?.referral_code || 'P2P'}`
             },
             {
               onResponse: (url: string) => {
@@ -621,7 +621,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
                     order_id: orderId,
                     amount: Number(amount || packagePrice || 500).toFixed(2),
                     customer_mobile: user?.mobile || '',
-                    remark: `UltraPay|${user?.referral_code || 'P2P'}`
+                    remark: `MoneyOcean|${user?.referral_code || 'P2P'}`
                   },
                   {
                     onResponse: (url: string) => {

@@ -68,7 +68,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
       // Refresh auth context with verified user profile & dashboard data
       await refreshUserData();
 
-      showToast('success', 'Logged in successfully', 'Welcome back to UltraPay!');
+      showToast('success', 'Logged in successfully', 'Welcome back to MoneyOcean!');
       setTimeout(() => {
         onNavigate('dashboard');
       }, 300);

@@ -108,12 +108,12 @@ export const Footer: React.FC<{ onNavigate: (route: string) => void }> = ({ onNa
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div>
-            © {new Date().getFullYear()} UltraPay Platform. All rights reserved. Transparent community wealth platform.
+            © {new Date().getFullYear()} MoneyOcean Platform. All rights reserved. Transparent community wealth platform.
           </div>
           <div className="flex items-center gap-6">
             <span className="flex items-center gap-1.5 text-slate-400">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
-              Powered by UltraPay Realtime Smart Ledger Engine
+              Powered by MoneyOcean Realtime Smart Ledger Engine
             </span>
           </div>
         </div>

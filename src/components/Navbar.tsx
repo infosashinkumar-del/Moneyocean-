@@ -90,7 +90,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentRoute }) => {
                 onClick={() => onNavigate('signup')}
                 className="flex items-center gap-1 sm:gap-2 px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl gold-btn-gradient font-bold text-xs sm:text-sm cursor-pointer shadow-md shadow-amber-500/20"
               >
-                <span>Join <span className="hidden xs:inline">UltraPay</span></span>
+                <span>Join <span className="hidden xs:inline">MoneyOcean</span></span>
                 <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </>

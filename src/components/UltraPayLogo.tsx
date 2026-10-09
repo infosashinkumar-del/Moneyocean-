@@ -148,7 +148,7 @@ export const UltraPayLogo: React.FC<UltraPayLogoProps> = ({
         <div className={`flex flex-col leading-tight min-w-0 ${variant === 'vertical' ? 'items-center' : ''}`}>
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`${titleSizeClasses[size]} font-black font-display tracking-tight text-white flex items-center`}>
-              Ultra<span className="bg-gradient-to-r from-[#FFE58F] via-[#F59E0B] to-[#E5A93C] bg-clip-text text-transparent ml-0.5">Pay</span>
+              Money<span className="bg-gradient-to-r from-[#FFE58F] via-[#F59E0B] to-[#E5A93C] bg-clip-text text-transparent ml-0.5">Ocean</span>
             </span>
             
             {/* Live Instant P2P Tag */}
@@ -169,3 +169,5 @@ export const UltraPayLogo: React.FC<UltraPayLogoProps> = ({
     </div>
   );
 };
+
+export const MoneyOceanLogo = UltraPayLogo;

@@ -197,7 +197,7 @@ export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledRef
         return;
       }
 
-      showToast('success', 'Account Created!', 'Welcome to UltraPay. Redirecting to login...');
+      showToast('success', 'Account Created!', 'Welcome to MoneyOcean. Redirecting to login...');
       
       setTimeout(() => {
         onNavigate('login');

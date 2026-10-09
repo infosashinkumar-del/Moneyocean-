@@ -1,6 +1,6 @@
 {
   "name": "MoneyOcean",
-  "description": "UltraPay - Modern Fintech P2P Affiliate & Automation Platform with automated pass-up settlement and instant UPI payouts.",
+  "description": "MoneyOcean - Modern Fintech P2P Affiliate & Automation Platform with automated pass-up settlement and instant UPI payouts.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -201,7 +201,7 @@
   animation: chakra-spin-reverse 12s linear infinite;
 }
 
-/* Hide third-party unbranded Swal modals from overriding UltraPay */
+/* Hide third-party unbranded Swal modals from overriding MoneyOcean */
 .swal2-container.swal2-backdrop-show {
   background: rgba(5, 8, 17, 0.9) !important;
   backdrop-filter: blur(12px) !important;

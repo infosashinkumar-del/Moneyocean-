@@ -142,11 +142,11 @@ export const PaymentChakraRedirect: React.FC<PaymentChakraRedirectProps> = ({
           </div>
         </div>
 
-        {/* UltraPay Brand Title & Official Tagline in Prominent Typography */}
+        {/* MoneyOcean Brand Title & Official Tagline in Prominent Typography */}
         <div className="space-y-2 pt-1 text-center">
           <div className="flex items-center justify-center gap-2.5">
             <span className="text-3xl sm:text-4xl font-extrabold font-display tracking-tight text-white drop-shadow-[0_2px_12px_rgba(245,158,11,0.5)]">
-              Ultra<span className="bg-gradient-to-r from-[#FFF4CC] via-[#F59E0B] to-[#D97706] bg-clip-text text-transparent">Pay</span>
+              Money<span className="bg-gradient-to-r from-[#FFF4CC] via-[#F59E0B] to-[#D97706] bg-clip-text text-transparent">Ocean</span>
             </span>
             <span className="text-[10px] font-mono uppercase px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold shadow-md shadow-amber-500/20">
               Instant P2P
@@ -230,7 +230,7 @@ export const PaymentChakraRedirect: React.FC<PaymentChakraRedirectProps> = ({
 
         {/* Footer Note */}
         <p className="text-[10px] text-slate-500 font-mono">
-          🔒 Secured by UltraPay Realtime Settlement Engine. UPI PIN is only entered on your verified bank app.
+          🔒 Secured by MoneyOcean Realtime Settlement Engine. UPI PIN is only entered on your verified bank app.
         </p>
       </div>
     </div>

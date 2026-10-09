@@ -50,7 +50,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
     },
     {
       q: `What is the ${lockMins}-minute reservation lock during checkout?`,
-      a: `To guarantee strict pass-up accuracy and prevent race conditions between simultaneous buyers, UltraPay locks the qualifying beneficiary slot for exactly ${lockMins} minutes. If payment is completed within ${lockMins} minutes, the slot settles instantly.`
+      a: `To guarantee strict pass-up accuracy and prevent race conditions between simultaneous buyers, MoneyOcean locks the qualifying beneficiary slot for exactly ${lockMins} minutes. If payment is completed within ${lockMins} minutes, the slot settles instantly.`
     },
     {
       q: 'Do I need technical skills to start earning?',
@@ -85,7 +85,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
 
               {/* Headline */}
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold font-display tracking-tight text-white leading-[1.12]">
-                Empower Your Wealth with <span className="gold-gradient-text">UltraPay</span>
+                Empower Your Wealth with <span className="gold-gradient-text">MoneyOcean</span>
               </h1>
 
               {/* Official Tagline Badge */}
@@ -184,7 +184,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                   Our Vision
                 </h3>
                 <p className="text-base text-slate-300 leading-relaxed">
-                  At <strong className="text-[#e5a93c] font-bold">ULTRAPAY</strong>, we envision a world where financial growth is no longer a privilege, but a global standard. Our vision is to build a future where people from all walks of life gain access to powerful digital income tools, automated peer-to-peer protocols, and sustainable decentralized wealth creation.
+                  At <strong className="text-[#e5a93c] font-bold">MONEYOCEAN</strong>, we envision a world where financial growth is no longer a privilege, but a global standard. Our vision is to build a future where people from all walks of life gain access to powerful digital income tools, automated peer-to-peer protocols, and sustainable decentralized wealth creation.
                 </p>
               </div>
               <div className="mt-8 pt-6 border-t border-[#232c3f] flex items-center justify-between">
@@ -211,7 +211,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                   Our Mission
                 </h3>
                 <p className="text-base text-slate-300 leading-relaxed">
-                  Our mission is to democratize wealth-building by equipping individuals worldwide with smart automation tools, transparent instant settlements, and real-time ledger verification. At <strong className="text-emerald-400 font-bold">ULTRAPAY</strong>, we are committed to helping everyday earners scale recurring direct income streams with zero friction.
+                  Our mission is to democratize wealth-building by equipping individuals worldwide with smart automation tools, transparent instant settlements, and real-time ledger verification. At <strong className="text-emerald-400 font-bold">MONEYOCEAN</strong>, we are committed to helping everyday earners scale recurring direct income streams with zero friction.
                 </p>
               </div>
               <div className="mt-8 pt-6 border-t border-[#232c3f] flex items-center justify-between">
@@ -232,7 +232,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
               Autonomous Verification
             </h2>
             <h3 className="text-3xl sm:text-4xl font-bold font-display text-white tracking-tight">
-              Why UltraPay Outperforms Legacy Matrix Models
+              Why MoneyOcean Outperforms Legacy Matrix Models
             </h3>
           </div>
 
@@ -352,7 +352,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
       <section className="py-20 bg-gradient-to-b from-[#07090e] to-[#0c1017] border-t border-amber-500/20 text-center relative overflow-hidden">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <h2 className="text-3xl sm:text-5xl font-extrabold font-display text-white tracking-tight mb-6">
-            Step into <span className="gold-gradient-text">UltraPay</span> Today
+            Step into <span className="gold-gradient-text">MoneyOcean</span> Today
           </h2>
           <p className="text-base sm:text-lg text-slate-300 mb-8 max-w-xl mx-auto">
             Join hundreds of members generating autonomous ₹{unitPrice.toLocaleString('en-IN')} UPI payments every day with verifiable P2P technology.
