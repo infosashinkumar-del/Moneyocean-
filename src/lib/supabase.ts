@@ -988,8 +988,8 @@ export async function getNodeDownlines(nodeId: string): Promise<any[]> {
         .or(`sponsor_id.eq.${nodeId},beneficiary_user_id.eq.${nodeId},buyer_user_id.in.(${directIds.join(',')}),sponsor_id.in.(${directIds.join(',')})`),
       supabase
         .from('passup_logs')
-        .select('original_referrer_id, passed_to_id, sale_number, amount, passup_reason, created_at')
-        .or(`original_referrer_id.eq.${nodeId},passed_to_id.eq.${nodeId},original_referrer_id.in.(${directIds.join(',')})`),
+        .select('original_referrer_id, passed_to_upline_id, sale_number, amount, passup_reason, created_at')
+        .or(`original_referrer_id.eq.${nodeId},passed_to_upline_id.eq.${nodeId},original_referrer_id.in.(${directIds.join(',')})`),
       supabase
         .from('sale_ledger')
         .select('sale_number, sponsor_id, buyer_user_id, beneficiary_user_id, is_passup, amount, created_at')
@@ -1027,7 +1027,7 @@ export async function getNodeDownlines(nodeId: string): Promise<any[]> {
       const memberChildren = subList.filter(s => s.sponsor_id === member.id).map((child, cIdx) => {
         const childTx = allTx.find(t => t.buyer_user_id === child.id);
         const childLedger = allLedger.find(l => l.buyer_user_id === child.id);
-        const childPassup = allPassups.find(p => p.original_referrer_id === member.id && p.passed_to_id === nodeId);
+        const childPassup = allPassups.find(p => p.original_referrer_id === member.id && p.passed_to_upline_id === nodeId);
         const rawChildSale = childLedger?.sale_number ?? childTx?.sale_number ?? (childPassup?.sale_number || null);
         const childSaleNumber = (rawChildSale && Number(rawChildSale) > 0) ? Number(rawChildSale) : (cIdx + 1);
 
