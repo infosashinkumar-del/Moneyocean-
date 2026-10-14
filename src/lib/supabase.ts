@@ -957,6 +957,20 @@ export async function toggleUserMerchantKeyStatus(keyId: string, isActive: boole
 // 9. Live Team Tree (Strict Database Query with Unlimited Dynamic Drill-Down & Backend Ledger Attribution)
 export async function getNodeDownlines(nodeId: string): Promise<any[]> {
   try {
+    // 1. Attempt to fetch server-verified tree (service_role bypasses RLS for drill-down kept sales #2, #4+)
+    try {
+      const resp = await fetch(`/api/team-tree/${encodeURIComponent(nodeId)}`);
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json && json.success && Array.isArray(json.tree)) {
+          return json.tree;
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[Supabase] /api/team-tree fetch failed, using client fallback:', apiErr);
+    }
+
+    // 2. Client fallback
     const { data: directs, error } = await supabase
       .from('users')
       .select('id, full_name, email, referral_code, is_active, joining_date, direct_referrals_count, team_size, total_income, sponsor_id')
@@ -1001,68 +1015,115 @@ export async function getNodeDownlines(nodeId: string): Promise<any[]> {
     const allLedger = ledgerRecords || [];
     const subList = subDirects || [];
 
-    return directs.map((member, idx) => {
-      // Find direct transaction and ledger for this member
-      const memberTx = allTx.find(t => t.buyer_user_id === member.id);
-      const memberLedger = allLedger.find(l => l.buyer_user_id === member.id);
-      const memberPassup = allPassups.find(p => p.original_referrer_id === nodeId && (p.sale_number === memberTx?.sale_number || p.sale_number === memberLedger?.sale_number));
+    // Helper to compute downlines for a given sponsor, assigning known slot numbers first and then filling unused numbers
+    function computeDownlinesClient(sponsorId: string, memberList: any[], isDirectLevel: boolean) {
+      const assignedByBuyer = new Map<string, { saleNumber: number; isPassup: boolean; utr: string | null; amount: number; beneficiaryId?: string }>();
+      const takenSlots = new Set<number>();
 
-      // Real sale number from sale_ledger, transaction, or passup log (fallback to chronological idx + 1)
-      const rawSaleNum = memberLedger?.sale_number ?? memberTx?.sale_number ?? memberPassup?.sale_number ?? null;
-      const sale_number = (rawSaleNum && Number(rawSaleNum) > 0) ? Number(rawSaleNum) : (idx + 1);
+      for (const m of memberList) {
+        const mTx = allTx.find(t => t.buyer_user_id === m.id);
+        const mLedger = allLedger.find(l => l.buyer_user_id === m.id && l.sponsor_id === sponsorId);
+        const mPassup = allPassups.find(p => p.original_referrer_id === sponsorId && (p.sale_number === mTx?.sale_number || p.sale_number === mLedger?.sale_number));
 
-      // Real pass-up verification from database
-      const isPassUp = Boolean(
-        memberLedger?.is_passup ||
-        memberTx?.is_passup || 
-        memberTx?.transaction_type?.includes('PASSUP') || 
-        (memberLedger && memberLedger.beneficiary_user_id !== nodeId) ||
-        (memberTx && memberTx.beneficiary_user_id !== nodeId) ||
-        memberPassup ||
-        sale_number === 1 ||
-        sale_number === 3
-      );
+        const rawNum = mLedger?.sale_number ?? mTx?.sale_number ?? mPassup?.sale_number;
+        if (rawNum !== undefined && rawNum !== null && Number(rawNum) > 0) {
+          const num = Number(rawNum);
+          takenSlots.add(num);
+          const isPass = Boolean(
+            mLedger?.is_passup ?? 
+            mTx?.is_passup ?? 
+            mPassup ?? 
+            (mLedger && mLedger.beneficiary_user_id !== sponsorId) ??
+            (mTx && mTx.beneficiary_user_id !== sponsorId) ??
+            (num === 1 || num === 3)
+          );
+          assignedByBuyer.set(m.id, {
+            saleNumber: num,
+            isPassup: isPass,
+            utr: mTx?.utr_number || null,
+            amount: Number(mLedger?.amount || mTx?.amount || 0),
+            beneficiaryId: mLedger?.beneficiary_user_id || mTx?.beneficiary_user_id
+          });
+        }
+      }
 
-      // Level 2 children for this member
-      const memberChildren = subList.filter(s => s.sponsor_id === member.id).map((child, cIdx) => {
-        const childTx = allTx.find(t => t.buyer_user_id === child.id);
-        const childLedger = allLedger.find(l => l.buyer_user_id === child.id);
-        const childPassup = allPassups.find(p => p.original_referrer_id === member.id && p.passed_to_upline_id === nodeId);
-        const rawChildSale = childLedger?.sale_number ?? childTx?.sale_number ?? (childPassup?.sale_number || null);
-        const childSaleNumber = (rawChildSale && Number(rawChildSale) > 0) ? Number(rawChildSale) : (cIdx + 1);
+      // Chronologically assign unused slots to any member without settled transaction yet
+      let nextSlot = 1;
+      const getNextUnusedSlot = () => {
+        while (takenSlots.has(nextSlot)) {
+          nextSlot++;
+        }
+        takenSlots.add(nextSlot);
+        return nextSlot;
+      };
 
-        // Child passed up to nodeId if beneficiary is nodeId or passup log matches
-        const isChildPassupToNode = Boolean(
-          (childLedger && childLedger.beneficiary_user_id === nodeId) ||
-          (childTx && childTx.beneficiary_user_id === nodeId) ||
-          childPassup ||
-          (childTx?.is_passup && (childSaleNumber === 1 || childSaleNumber === 3)) ||
-          (childLedger?.is_passup && (childSaleNumber === 1 || childSaleNumber === 3))
-        );
+      const list = memberList.map((m) => {
+        let assigned = assignedByBuyer.get(m.id);
+        if (!assigned) {
+          const slot = getNextUnusedSlot();
+          const isPass = (slot === 1 || slot === 3);
+          assigned = {
+            saleNumber: slot,
+            isPassup: isPass,
+            utr: null,
+            amount: 0,
+            beneficiaryId: undefined
+          };
+        }
 
-        return {
-          ...child,
-          level: 2,
-          sale_number: childSaleNumber,
-          saleNum: childSaleNumber,
-          is_passup: Boolean(childLedger?.is_passup || childTx?.is_passup || childPassup),
-          isChildPassupToYou: isChildPassupToNode,
-          childMoney: (isChildPassupToNode && (childLedger?.amount || childTx?.amount)) ? Number(childLedger?.amount || childTx?.amount) : 0,
-          utr: childTx?.utr_number || null,
-          children: []
-        };
+        const saleNum = assigned.saleNumber;
+        const isPassUp = assigned.isPassup;
+
+        if (isDirectLevel) {
+          return {
+            ...m,
+            level: 1,
+            sale_number: saleNum,
+            saleNum: saleNum,
+            saleNumber: saleNum,
+            is_passup: isPassUp,
+            isPassedUp: isPassUp,
+            flowType: isPassUp ? 'PASS_UP' : 'DIRECT_KEEP',
+            moneyReceived: (!isPassUp && assigned.amount) ? assigned.amount : (!isPassUp ? 5000 : 0),
+            utr: assigned.utr,
+            children: [] as any[]
+          };
+        } else {
+          const isChildPassupToNode = Boolean(
+            (assigned.beneficiaryId && assigned.beneficiaryId === nodeId) ||
+            allPassups.some(p => p.original_referrer_id === m.sponsor_id && p.passed_to_upline_id === nodeId && p.sale_number === saleNum) ||
+            (isPassUp && (saleNum === 1 || saleNum === 3))
+          );
+
+          return {
+            ...m,
+            level: 2,
+            sale_number: saleNum,
+            saleNum: saleNum,
+            saleNumber: saleNum,
+            is_passup: isPassUp,
+            isPassedUp: isPassUp,
+            isChildPassupToYou: isChildPassupToNode,
+            didChildPayMe: isChildPassupToNode,
+            childMoney: (isChildPassupToNode && assigned.amount) ? assigned.amount : (isChildPassupToNode ? 5000 : 0),
+            utr: assigned.utr,
+            children: [] as any[]
+          };
+        }
       });
 
+      list.sort((a, b) => (a.sale_number || 0) - (b.sale_number || 0));
+      return list;
+    }
+
+    const level1List = computeDownlinesClient(nodeId, directs, true);
+
+    return level1List.map(directMember => {
+      const directChildrenRaw = subList.filter(s => s.sponsor_id === directMember.id);
+      const children = computeDownlinesClient(directMember.id, directChildrenRaw, false);
       return {
-        ...member,
-        level: 1,
-        sale_number,
-        saleNum: sale_number,
-        is_passup: isPassUp,
-        flowType: isPassUp ? 'PASS_UP' : 'DIRECT_KEEP',
-        moneyReceived: (!isPassUp && memberTx?.amount) ? Number(memberTx.amount) : 0,
-        utr: memberTx?.utr_number || null,
-        children: memberChildren
+        ...directMember,
+        children
       };
     });
   } catch (err) {

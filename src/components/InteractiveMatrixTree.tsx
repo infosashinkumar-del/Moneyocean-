@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   Users, 
   ArrowUpRight, 
@@ -10,12 +10,14 @@ import {
   X, 
   Info,
   ChevronRight,
+  ChevronLeft,
   Search,
   ChevronDown,
   Copy,
   Check,
   ArrowRight,
-  Loader2
+  Loader2,
+  MoveHorizontal
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -67,9 +69,7 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
   const unitPrice = packagePrice || 5000;
   
   const [zoomLevel, setZoomLevel] = useState<number>(1);
-  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [dynamicChildrenCache, setDynamicChildrenCache] = useState<Record<string, MatrixNodeData[]>>({});
   const [drillLoading, setDrillLoading] = useState(false);
 
@@ -89,7 +89,12 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
   const [copiedCode, setCopiedCode] = useState(false);
-  const canvasRef = useRef<HTMLDivElement>(null);
+
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const hasDraggedRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
+  const touchStartRef = useRef({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
 
   // Active root resolution
   const currentRootId = drillDownPath[drillDownPath.length - 1]?.id;
@@ -136,18 +141,31 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
 
   // Strict Data Ledger Verification with resilient fallback
   const enrichedDirects = useMemo(() => {
-    return activeChildren.map((node, index) => {
+    const list = activeChildren.map((node, index) => {
       // Prioritize database verified attributes
-      const rawSaleNum = node.saleNum ?? (node as any).sale_number ?? null;
+      const rawSaleNum = node.saleNum ?? (node as any).sale_number ?? (node as any).saleNumber ?? null;
       const realSaleNum = (rawSaleNum && Number(rawSaleNum) > 0) ? Number(rawSaleNum) : (index + 1);
-      const isPassUp = node.isPassedUp ?? node.is_passup ?? (realSaleNum === 1 || realSaleNum === 3);
+      const isPassUp = node.isPassedUp ?? node.is_passup ?? (node.flowType === 'PASS_UP') ?? (realSaleNum === 1 || realSaleNum === 3);
       
+      const childrenSorted = [...(node.children || [])].map((c: any, cIdx: number) => {
+        const cRawNum = c.saleNum ?? c.sale_number ?? c.saleNumber ?? null;
+        const cSaleNum = (cRawNum && Number(cRawNum) > 0) ? Number(cRawNum) : (cIdx + 1);
+        return {
+          ...c,
+          saleNum: cSaleNum,
+          saleNumber: cSaleNum
+        };
+      }).sort((a: any, b: any) => (a.saleNumber || 0) - (b.saleNumber || 0));
+
       return {
         ...node,
         saleNumber: realSaleNum,
-        flowType: isPassUp ? ('PASS_UP' as const) : ('DIRECT_KEEP' as const)
+        flowType: isPassUp ? ('PASS_UP' as const) : ('DIRECT_KEEP' as const),
+        children: childrenSorted
       };
     });
+
+    return list.sort((a, b) => (a.saleNumber || 0) - (b.saleNumber || 0));
   }, [activeChildren]);
 
   const filteredDirects = useMemo(() => {
@@ -172,34 +190,109 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
   const nextSaleNumber = (teamData?.length || 0) + 1;
   const isNextSalePassUp = nextSaleNumber === 1 || nextSaleNumber === 3;
 
-  // Zoom / Pan handlers
+  // Zoom / Pan & Smooth Scroll handlers
   const handleZoom = (delta: number) => {
     setZoomLevel((prev) => Math.min(Math.max(0.5, Number((prev + delta).toFixed(1))), 1.8));
   };
 
-  const handleResetView = () => {
-    setZoomLevel(1);
-    setPanOffset({ x: 0, y: 0 });
+  const handleScrollBy = (offset: number) => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+    }
   };
 
+  const handleCenterTree = () => {
+    if (scrollContainerRef.current) {
+      const el = scrollContainerRef.current;
+      const targetLeft = Math.max(0, (el.scrollWidth - el.clientWidth) / 2);
+      el.scrollTo({ left: targetLeft, top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const handleResetView = () => {
+    setZoomLevel(1);
+    handleCenterTree();
+  };
+
+  // Auto-center horizontally when sub-tree loads or breadcrumbs change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleCenterTree();
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [currentRootId, filteredDirects.length, zoomLevel]);
+
+  // Mouse Drag Panning
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 0) {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button, a, input, select, [role="button"]')) {
+      return;
+    }
+    if (scrollContainerRef.current) {
+      isDraggingRef.current = true;
+      hasDraggedRef.current = false;
       setIsDragging(true);
-      setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+      dragStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        scrollLeft: scrollContainerRef.current.scrollLeft,
+        scrollTop: scrollContainerRef.current.scrollTop
+      };
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging) {
-      setPanOffset({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y
-      });
+    if (!isDraggingRef.current || !scrollContainerRef.current) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      hasDraggedRef.current = true;
     }
+    scrollContainerRef.current.scrollLeft = dragStartRef.current.scrollLeft - dx;
+    scrollContainerRef.current.scrollTop = dragStartRef.current.scrollTop - dy;
   };
 
   const handleMouseUp = () => {
+    isDraggingRef.current = false;
     setIsDragging(false);
+    setTimeout(() => {
+      hasDraggedRef.current = false;
+    }, 50);
+  };
+
+  // Touch Swipe for Mobile & Tablet
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if ((e.target as HTMLElement).closest('button, a, input, select')) return;
+    if (scrollContainerRef.current && e.touches.length === 1) {
+      const touch = e.touches[0];
+      touchStartRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        scrollLeft: scrollContainerRef.current.scrollLeft,
+        scrollTop: scrollContainerRef.current.scrollTop
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!scrollContainerRef.current || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+    scrollContainerRef.current.scrollLeft = touchStartRef.current.scrollLeft - dx;
+    scrollContainerRef.current.scrollTop = touchStartRef.current.scrollTop - dy;
+  };
+
+  const handleTouchEnd = () => {
+    // End touch gesture
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.05 : -0.05;
+      setZoomLevel(prev => Math.min(Math.max(0.5, Number((prev + delta).toFixed(2))), 1.6));
+    }
   };
 
   const toggleNodeExpand = (id: string, e?: React.MouseEvent) => {
@@ -321,6 +414,32 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Scroll Navigation Toolbar Buttons */}
+          <div className="flex items-center bg-[#111722] border border-[#212c40] rounded-lg p-0.5">
+            <button
+              onClick={() => handleScrollBy(-280)}
+              className="p-1.5 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
+              title="Scroll Left"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={handleCenterTree}
+              className="px-2 py-1 text-[11px] font-mono text-slate-300 hover:text-white transition-colors cursor-pointer flex items-center gap-1"
+              title="Center Tree"
+            >
+              <RotateCcw className="w-3 h-3 text-amber-400" />
+              <span>Center</span>
+            </button>
+            <button
+              onClick={() => handleScrollBy(280)}
+              className="p-1.5 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
+              title="Scroll Right"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           <div className="flex items-center bg-[#111722] border border-[#212c40] rounded-lg p-0.5">
             <button
               onClick={expandAll}
@@ -345,9 +464,13 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
             >
               <ZoomOut className="w-3.5 h-3.5" />
             </button>
-            <span className="px-2 font-mono text-[11px] text-slate-300 min-w-[36px] text-center">
+            <button
+              onClick={() => setZoomLevel(1)}
+              className="px-2 font-mono text-[11px] text-slate-300 min-w-[36px] text-center hover:text-amber-400 transition-colors cursor-pointer"
+              title="Reset Zoom to 100%"
+            >
               {Math.round(zoomLevel * 100)}%
-            </span>
+            </button>
             <button
               onClick={() => handleZoom(0.1)}
               className="p-1.5 text-slate-400 hover:text-white transition-colors cursor-pointer"
@@ -355,27 +478,13 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
-            <button
-              onClick={handleResetView}
-              className="p-1.5 text-slate-400 hover:text-white border-l border-[#212c40] transition-colors cursor-pointer"
-              title="Center"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
       </div>
 
       {/* Tree Canvas */}
       <div 
-        ref={canvasRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        className={`relative min-h-[580px] rounded-3xl bg-[#07090e] border border-[#1c2436] overflow-hidden shadow-2xl flex flex-col justify-between select-none ${
-          isDragging ? 'cursor-grabbing' : 'cursor-grab'
-        }`}
+        className="relative rounded-3xl bg-[#07090e] border border-[#1c2436] shadow-2xl flex flex-col justify-between overflow-hidden"
       >
         {/* Breadcrumb Path */}
         <div className="relative z-10 p-3.5 sm:p-4 border-b border-[#1c2436] bg-[#0c1017]/95 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
@@ -418,23 +527,65 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
           </div>
         </div>
 
-        {/* Viewport */}
+        {/* Floating Quick Navigation Buttons */}
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 z-20 pointer-events-auto hidden sm:block">
+          <button
+            onClick={() => handleScrollBy(-350)}
+            className="w-10 h-10 rounded-full bg-[#0c1017]/90 hover:bg-amber-500 hover:text-slate-950 text-slate-300 border border-[#212c40] hover:border-amber-400 flex items-center justify-center shadow-2xl transition-all cursor-pointer backdrop-blur-md group"
+            title="Scroll Left"
+          >
+            <ChevronLeft className="w-5 h-5 group-hover:-translate-x-0.5 transition-transform" />
+          </button>
+        </div>
+
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-20 pointer-events-auto hidden sm:block">
+          <button
+            onClick={() => handleScrollBy(350)}
+            className="w-10 h-10 rounded-full bg-[#0c1017]/90 hover:bg-amber-500 hover:text-slate-950 text-slate-300 border border-[#212c40] hover:border-amber-400 flex items-center justify-center shadow-2xl transition-all cursor-pointer backdrop-blur-md group"
+            title="Scroll Right"
+          >
+            <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+          </button>
+        </div>
+
+        {/* Scrollable Viewport */}
         <div
-          className="relative z-0 p-8 sm:p-12 overflow-visible flex flex-col items-center transition-transform duration-75 origin-top min-w-full"
-          style={{ 
-            transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})` 
+          ref={scrollContainerRef}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onWheel={handleWheel}
+          className={`relative z-0 w-full min-h-[580px] max-h-[720px] overflow-x-auto overflow-y-auto overscroll-contain select-none scrollbar-thin scrollbar-thumb-amber-500/40 hover:scrollbar-thumb-amber-500/70 scrollbar-track-slate-900/60 ${
+            isDragging ? 'cursor-grabbing' : 'cursor-grab'
+          }`}
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'pan-x pan-y'
           }}
         >
           {drillLoading ? (
-            <div className="py-20 flex flex-col items-center gap-2">
+            <div className="py-20 flex flex-col items-center justify-center gap-2 min-h-[400px]">
               <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
               <span className="text-xs font-mono text-slate-400">Loading sub-tree records...</span>
             </div>
           ) : (
-            <>
+            <div
+              className="min-w-fit mx-auto flex flex-col items-center p-8 sm:p-12 transition-transform duration-100 origin-top"
+              style={{ 
+                transform: `scale(${zoomLevel})`,
+                transformOrigin: '50% 0'
+              }}
+            >
               {/* CURRENT ROOT NODE */}
               <div
-                onClick={() => setSelectedNode({ node: currentRootNode as any, role: 'ROOT' })}
+                onClick={() => {
+                  if (hasDraggedRef.current) return;
+                  setSelectedNode({ node: currentRootNode as any, role: 'ROOT' });
+                }}
                 className="group relative cursor-pointer"
               >
                 <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-amber-700 rounded-2xl blur-sm opacity-50 group-hover:opacity-100 transition duration-300" />
@@ -480,34 +631,56 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
                   <p className="text-xs text-slate-500 mt-1">Share your referral link to build direct IDs!</p>
                 </div>
               ) : (
-                <div className="w-full relative mt-1">
-                  <div className="h-0.5 bg-slate-700 mx-auto w-[85%] relative">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-2.5 py-0.5 bg-[#07090e] border border-[#1c2436] text-[10px] font-mono text-slate-400 rounded-full whitespace-nowrap">
-                      Direct Referrals ({filteredDirects.length})
-                    </div>
-                  </div>
+                <div className="w-full flex flex-col items-center mt-0">
+                  {/* Stem from Root to Level 1 Horizontal Bar */}
+                  <div className="w-0.5 h-6 bg-slate-600 mx-auto" />
 
-                  <div className="pt-6 flex flex-wrap justify-center gap-6 sm:gap-8 items-start">
-                    {filteredDirects.map((member) => {
+                  {/* Level 1 Horizontal Tree Row */}
+                  <div className="flex justify-center items-start min-w-max mx-auto px-6 py-0">
+                    {filteredDirects.map((member, idx) => {
                       const isPassUp = member.flowType === 'PASS_UP';
                       const childrenCount = member.children?.length || member.downlines?.length || 0;
-                      const isExpanded = expandedNodes[member.id];
+                      const isExpanded = expandedNodes[member.id] ?? true;
+                      const totalL1 = filteredDirects.length;
+                      const isFirstL1 = idx === 0;
+                      const isLastL1 = idx === totalL1 - 1;
+                      const isSingleL1 = totalL1 === 1;
 
                       return (
-                        <div key={member.id} className="flex flex-col items-center">
-                          <div className={`w-0.5 h-6 ${isPassUp ? 'bg-cyan-500/60' : 'bg-emerald-500/60'}`} />
+                        <div key={member.id} className="flex flex-col items-center px-3 sm:px-5 relative">
+                          {/* Horizontal Connector Bar */}
+                          {!isSingleL1 && (
+                            <div className="absolute top-0 left-0 right-0 h-6 pointer-events-none">
+                              <div
+                                className={`border-t-2 border-slate-600 h-full ${
+                                  isFirstL1
+                                    ? 'ml-[50%] w-1/2'
+                                    : isLastL1
+                                    ? 'mr-[50%] w-1/2'
+                                    : 'w-full'
+                                }`}
+                              />
+                            </div>
+                          )}
 
+                          {/* Vertical Drop Line to Node Card */}
+                          <div className={`w-0.5 h-6 ${isPassUp ? 'bg-cyan-500/70' : 'bg-emerald-500/70'}`} />
+
+                          {/* Level 1 Node Card */}
                           <div
-                            onClick={() => setSelectedNode({
-                              node: member,
-                              role: isPassUp ? 'PASS_UP' : 'DIRECT_KEEP',
-                              saleNumber: member.saleNumber || undefined,
-                              parentName: currentRootNode.full_name
-                            })}
-                            className={`w-64 sm:w-72 rounded-2xl p-4 transition-all duration-200 cursor-pointer text-left relative overflow-hidden group shadow-lg ${
+                            onClick={() => {
+                              if (hasDraggedRef.current) return;
+                              setSelectedNode({
+                                node: member,
+                                role: isPassUp ? 'PASS_UP' : 'DIRECT_KEEP',
+                                saleNumber: member.saleNumber || undefined,
+                                parentName: currentRootNode.full_name
+                              });
+                            }}
+                            className={`w-64 sm:w-72 rounded-2xl p-4 transition-all duration-200 cursor-pointer text-left relative overflow-hidden group shadow-xl ${
                               isPassUp
-                                ? 'bg-[#0c1017] border-2 border-cyan-500/40 hover:border-cyan-400'
-                                : 'bg-[#0c1017] border-2 border-emerald-500/40 hover:border-emerald-400'
+                                ? 'bg-[#0c1017] border-2 border-cyan-500/50 hover:border-cyan-400 hover:shadow-cyan-950/30'
+                                : 'bg-[#0c1017] border-2 border-emerald-500/50 hover:border-emerald-400 hover:shadow-emerald-950/30'
                             }`}
                           >
                             <div className="flex items-center justify-between gap-2 mb-2.5">
@@ -529,7 +702,7 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
                                 )}
                               </span>
                               <span className={`w-2 h-2 rounded-full ${
-                                member.is_active ? 'bg-emerald-400' : 'bg-slate-600'
+                                member.is_active ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50' : 'bg-slate-600'
                               }`} />
                             </div>
 
@@ -562,7 +735,7 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
                                   e.stopPropagation();
                                   handleDrillDown(member);
                                 }}
-                                className="px-2 py-1 rounded-lg bg-[#111722] hover:bg-[#1a2333] border border-[#212c40] text-[10px] font-mono text-amber-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
+                                className="px-2.5 py-1 rounded-lg bg-[#111722] hover:bg-[#1a2333] border border-[#212c40] text-[10px] font-mono text-amber-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
                               >
                                 <span>Drill Down</span>
                                 <ArrowRight className="w-3 h-3" />
@@ -571,58 +744,132 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
                               {childrenCount > 0 && (
                                 <button
                                   onClick={(e) => toggleNodeExpand(member.id, e)}
-                                  className="px-2 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/30 text-[10px] font-mono text-amber-300 flex items-center gap-1 transition-colors cursor-pointer"
+                                  className="px-2.5 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/30 text-[10px] font-mono text-amber-300 flex items-center gap-1 transition-colors cursor-pointer"
                                 >
-                                  <span>{childrenCount} Downlines</span>
+                                  <span>{childrenCount} L2 Branches</span>
                                   {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                                 </button>
                               )}
                             </div>
                           </div>
 
-                          {/* SUB-BRANCH CONTAINER */}
+                          {/* LEVEL 2 HORIZONTAL TREE BRANCHES */}
                           {childrenCount > 0 && isExpanded && (
-                            <div className="flex flex-col items-center mt-2 animate-in fade-in slide-in-from-top-2">
-                              <div className="w-0.5 h-4 bg-amber-500/40" />
-                              <div className="p-3 rounded-2xl bg-[#0c1017]/95 border border-amber-500/30 space-y-2 w-64 sm:w-72 shadow-xl">
-                                <div className="text-[10px] font-mono font-bold text-amber-400 flex items-center justify-between">
-                                  <span className="flex items-center gap-1">
-                                    <Sparkles className="w-3 h-3" />
-                                    <span>Branch Inflow</span>
-                                  </span>
-                                  <span className="text-[9px] text-slate-400">Verified Ledger</span>
-                                </div>
-                                <div className="space-y-1.5">
-                                  {member.children?.map((child: any) => {
-                                    const isChildPassupToYou = Boolean(child.didChildPayMe);
-                                    return (
+                            <div className="flex flex-col items-center mt-0 pt-0 animate-in fade-in slide-in-from-top-2">
+                              {/* Vertical Stem from Level 1 Card down to Level 2 bar */}
+                              <div className="w-0.5 h-6 bg-amber-500/60 mx-auto" />
+
+                              {/* Level 2 Branch Header Badge */}
+                              <div className="px-2.5 py-0.5 rounded-full bg-[#07090e] border border-amber-500/40 text-[9px] font-mono text-amber-400 font-bold mb-0 shadow-sm flex items-center gap-1 z-10">
+                                <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                <span>Level 2 ({member.children.length})</span>
+                              </div>
+
+                              <div className="w-0.5 h-4 bg-slate-600 mx-auto" />
+
+                              {/* Level 2 Horizontal Org Chart Container */}
+                              <div className="flex justify-center items-start min-w-max mx-auto pt-0 px-2">
+                                {member.children?.map((child: any, cIdx: number) => {
+                                  const cTotal = member.children?.length || 1;
+                                  const isCFirst = cIdx === 0;
+                                  const isCLast = cIdx === cTotal - 1;
+                                  const isCSingle = cTotal === 1;
+                                  const isChildPassupToYou = Boolean(child.didChildPayMe || child.isChildPassupToYou);
+                                  const childSaleNum = child.saleNumber || child.saleNum || (cIdx + 1);
+
+                                  return (
+                                    <div key={child.id} className="flex flex-col items-center px-2 sm:px-3 relative">
+                                      {/* Level 2 Horizontal Connector Line */}
+                                      {!isCSingle && (
+                                        <div className="absolute top-0 left-0 right-0 h-5 pointer-events-none">
+                                          <div
+                                            className={`border-t-2 border-slate-600 h-full ${
+                                              isCFirst
+                                                ? 'ml-[50%] w-1/2'
+                                                : isCLast
+                                                ? 'mr-[50%] w-1/2'
+                                                : 'w-full'
+                                            }`}
+                                          />
+                                        </div>
+                                      )}
+
+                                      {/* Level 2 Vertical Drop Line */}
+                                      <div className={`w-0.5 h-5 ${isChildPassupToYou ? 'bg-amber-500/70' : 'bg-slate-600'}`} />
+
+                                      {/* Level 2 Node Card */}
                                       <div
-                                        key={child.id}
                                         onClick={(e) => {
                                           e.stopPropagation();
+                                          if (hasDraggedRef.current) return;
                                           setSelectedNode({
                                             node: child,
                                             role: 'LEVEL_2',
-                                            saleNumber: child.saleNum,
+                                            saleNumber: childSaleNum,
                                             parentName: member.full_name
                                           });
                                         }}
-                                        className="p-2 rounded-xl bg-[#07090e] border border-[#1c2436] hover:border-amber-500/40 text-[10px] font-mono flex items-center justify-between cursor-pointer transition-all hover:bg-[#111722]"
+                                        className={`w-48 sm:w-56 rounded-2xl p-3 transition-all duration-200 cursor-pointer text-left relative overflow-hidden group shadow-lg hover:scale-[1.02] ${
+                                          isChildPassupToYou
+                                            ? 'bg-[#0e131d] border-2 border-amber-500/60 hover:border-amber-400 hover:shadow-amber-950/40'
+                                            : 'bg-[#0a0d14] border-2 border-[#1e2738] hover:border-slate-500'
+                                        }`}
                                       >
-                                        <div className="overflow-hidden pr-2">
-                                          <p className="text-slate-200 font-semibold truncate">{child.full_name}</p>
-                                          <p className="text-[9px] text-slate-400">#{child.referral_code}</p>
-                                        </div>
-                                        <div className="text-right shrink-0">
-                                          <span className={`font-bold block ${isChildPassupToYou ? 'text-amber-400' : 'text-slate-400'}`}>
-                                            {isChildPassupToYou ? `+ ₹${(child.childMoney || unitPrice).toLocaleString('en-IN')} to You` : 'Kept by L1'}
+                                        <div className="flex items-center justify-between gap-1 mb-2">
+                                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold flex items-center gap-1 ${
+                                            isChildPassupToYou
+                                              ? 'bg-amber-950 text-amber-300 border border-amber-500/40'
+                                              : 'bg-slate-800 text-slate-300 border border-slate-700'
+                                          }`}>
+                                            {isChildPassupToYou ? (
+                                              <>
+                                                <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                                <span>Sale #{childSaleNum} Pass-Up</span>
+                                              </>
+                                            ) : (
+                                              <span>Sale #{childSaleNum} Direct Kept</span>
+                                            )}
                                           </span>
-                                          <span className="text-[8px] text-slate-400">Sale #{child.saleNum || '-'}</span>
+                                          <span className={`w-1.5 h-1.5 rounded-full ${child.is_active ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-[10px] shrink-0 ${
+                                            isChildPassupToYou
+                                              ? 'bg-amber-900/50 text-amber-200 border border-amber-500/40'
+                                              : 'bg-slate-800 text-slate-300 border border-slate-700'
+                                          }`}>
+                                            {child.full_name?.charAt(0)?.toUpperCase() || 'M'}
+                                          </div>
+                                          <div className="overflow-hidden min-w-0">
+                                            <p className="text-xs font-bold text-white truncate">{child.full_name}</p>
+                                            <p className="text-[9px] text-slate-400 font-mono truncate">#{child.referral_code}</p>
+                                          </div>
+                                        </div>
+
+                                        <div className="mt-2.5 pt-1.5 border-t border-[#1c2436] flex items-center justify-between text-[10px] font-mono">
+                                          <span className="text-slate-400">Yield</span>
+                                          <span className={`font-bold ${isChildPassupToYou ? 'text-amber-400' : 'text-slate-400'}`}>
+                                            {isChildPassupToYou ? `+ ₹${(child.childMoney || unitPrice).toLocaleString('en-IN')}` : 'Kept by L1'}
+                                          </span>
+                                        </div>
+
+                                        <div className="mt-2 pt-1.5 border-t border-[#1c2436]/60 flex items-center justify-between">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDrillDown(child);
+                                            }}
+                                            className="w-full py-1 rounded-lg bg-[#111722] hover:bg-[#1a2333] border border-[#212c40] text-[9px] font-mono text-amber-400 hover:text-white flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                                          >
+                                            <span>Drill Down</span>
+                                            <ArrowRight className="w-2.5 h-2.5" />
+                                          </button>
                                         </div>
                                       </div>
-                                    );
-                                  })}
-                                </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           )}
@@ -632,20 +879,29 @@ export const InteractiveMatrixTree: React.FC<InteractiveMatrixTreeProps> = ({
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
 
-        {/* Bottom Help */}
+        {/* Bottom Help & Navigation Indicators */}
         <div className="relative z-10 p-3 bg-[#0c1017]/95 border-t border-[#1c2436] text-[11px] text-slate-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Info className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <MoveHorizontal className="w-4 h-4 text-amber-400 shrink-0" />
             <span>
-              <strong>Tree Guide:</strong> Drag canvas to pan. Click <strong>Drill Down</strong> to explore deep sub-trees with real database sync.
+              <strong>Smooth 2D Scroll:</strong> Use mouse wheel, trackpad, touch swipe, or click &amp; drag to scroll. Use <strong className="text-amber-400">&lt; &gt;</strong> buttons to scroll left/right.
             </span>
           </div>
-          <div className="text-amber-400/90 font-mono text-[10px] font-bold">
-            100% Peer-to-Peer 2-Up Matrix
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              onClick={handleCenterTree}
+              className="px-2.5 py-1 rounded-md bg-[#111722] hover:bg-[#1a2333] border border-[#212c40] text-amber-400 hover:text-white font-mono text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Center View</span>
+            </button>
+            <span className="text-amber-400/90 font-mono text-[10px] font-bold">
+              100% Peer-to-Peer 2-Up Matrix
+            </span>
           </div>
         </div>
       </div>

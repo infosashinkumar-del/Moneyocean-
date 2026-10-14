@@ -444,6 +444,226 @@ async function startServer() {
     }
   });
 
+  // Admin Manual Settlement Endpoint
+  app.post('/api/admin/simulate-settle', async (req: Request, res: Response) => {
+    try {
+      const { order_id, utr } = req.body;
+      if (!order_id) {
+        return res.status(400).json({ success: false, message: 'order_id is required' });
+      }
+
+      const finalUtr = utr ? String(utr).trim() : `ADMIN_${Date.now()}`;
+      const { data, error } = await supabase.rpc('settle_p2p_sale', {
+        p_order_id: String(order_id).trim(),
+        p_status: 'SUCCESS',
+        p_utr: finalUtr,
+        p_webhook_signature: 'ADMIN_MANUAL_SETTLE'
+      });
+
+      if (error) {
+        return res.status(500).json({ success: false, message: error.message });
+      }
+
+      return res.json({
+        success: Boolean(data?.success),
+        message: data?.message || 'Order settled successfully by Admin',
+        data
+      });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // Live Team Tree Drill-Down with Full Service-Role Attribution
+  app.get('/api/team-tree/:nodeId', async (req: Request, res: Response) => {
+    try {
+      const nodeId = String(req.params.nodeId || '').trim();
+      if (!nodeId) {
+        return res.status(400).json({ success: false, message: 'nodeId is required', tree: [] });
+      }
+
+      // 1. Fetch Level 1 directs
+      const { data: directs, error: directErr } = await supabase
+        .from('users')
+        .select('id, full_name, email, referral_code, is_active, joining_date, direct_referrals_count, team_size, total_income, sponsor_id')
+        .eq('sponsor_id', nodeId)
+        .order('joining_date', { ascending: true });
+
+      if (directErr) {
+        console.warn('[Team Tree API] directs error:', directErr.message);
+        return res.status(500).json({ success: false, message: directErr.message, tree: [] });
+      }
+
+      if (!directs || directs.length === 0) {
+        return res.json({ success: true, tree: [] });
+      }
+
+      const directIds = directs.map(d => d.id);
+
+      // 2. Fetch Level 2 grandchildren, settled transactions, passup logs, and sale ledger
+      const [{ data: subDirects }, { data: txRecords }, { data: passupRecords }, { data: ledgerRecords }] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, full_name, email, referral_code, is_active, joining_date, direct_referrals_count, team_size, total_income, sponsor_id')
+          .in('sponsor_id', directIds)
+          .order('joining_date', { ascending: true }),
+        supabase
+          .from('transactions')
+          .select('order_id, utr_number, zap_key_used, buyer_user_id, beneficiary_user_id, sponsor_id, sale_number, is_passup, transaction_type, amount, payment_status, created_at')
+          .eq('payment_status', 'SUCCESS')
+          .or(`sponsor_id.eq.${nodeId},beneficiary_user_id.eq.${nodeId},buyer_user_id.in.(${directIds.join(',')}),sponsor_id.in.(${directIds.join(',')})`),
+        supabase
+          .from('passup_logs')
+          .select('original_referrer_id, passed_to_upline_id, sale_number, amount, passup_reason, created_at')
+          .or(`original_referrer_id.eq.${nodeId},passed_to_upline_id.eq.${nodeId},original_referrer_id.in.(${directIds.join(',')})`),
+        supabase
+          .from('sale_ledger')
+          .select('sale_number, sponsor_id, buyer_user_id, beneficiary_user_id, is_passup, amount, created_at')
+          .or(`sponsor_id.eq.${nodeId},beneficiary_user_id.eq.${nodeId},sponsor_id.in.(${directIds.join(',')})`)
+      ]);
+
+      // Filter out admin seed transactions
+      const allTx = (txRecords || []).filter(t => {
+        const txType = String(t.transaction_type || '').toUpperCase();
+        const orderId = String(t.order_id || '').toUpperCase();
+        const utr = String(t.utr_number || '').toUpperCase();
+        const zapKey = String(t.zap_key_used || '').toUpperCase();
+        return !(
+          txType.includes('VIP') ||
+          txType.includes('FREE_PASS') ||
+          orderId.includes('VIP_SEED') ||
+          utr.startsWith('SEED_') ||
+          zapKey.includes('ADMIN_')
+        );
+      });
+
+      const allPassups = passupRecords || [];
+      const allLedger = ledgerRecords || [];
+      const subList = subDirects || [];
+
+      // Helper to compute downlines for a given sponsor, assigning known slot numbers first and then filling unused numbers
+      function computeDownlines(sponsorId: string, memberList: any[], isDirectLevel: boolean) {
+        const assignedByBuyer = new Map<string, { saleNumber: number; isPassup: boolean; utr: string | null; amount: number; beneficiaryId?: string }>();
+        const takenSlots = new Set<number>();
+
+        for (const m of memberList) {
+          const mTx = allTx.find(t => t.buyer_user_id === m.id);
+          const mLedger = allLedger.find(l => l.buyer_user_id === m.id && l.sponsor_id === sponsorId);
+          const mPassup = allPassups.find(p => p.original_referrer_id === sponsorId && (p.sale_number === mTx?.sale_number || p.sale_number === mLedger?.sale_number));
+
+          const rawNum = mLedger?.sale_number ?? mTx?.sale_number ?? mPassup?.sale_number;
+          if (rawNum !== undefined && rawNum !== null && Number(rawNum) > 0) {
+            const num = Number(rawNum);
+            takenSlots.add(num);
+            const isPass = Boolean(
+              mLedger?.is_passup ?? 
+              mTx?.is_passup ?? 
+              mPassup ?? 
+              (mLedger && mLedger.beneficiary_user_id !== sponsorId) ??
+              (mTx && mTx.beneficiary_user_id !== sponsorId) ??
+              (num === 1 || num === 3)
+            );
+            assignedByBuyer.set(m.id, {
+              saleNumber: num,
+              isPassup: isPass,
+              utr: mTx?.utr_number || null,
+              amount: Number(mLedger?.amount || mTx?.amount || 0),
+              beneficiaryId: mLedger?.beneficiary_user_id || mTx?.beneficiary_user_id
+            });
+          }
+        }
+
+        // Chronologically assign unused slots to any member without settled transaction yet
+        let nextSlot = 1;
+        const getNextUnusedSlot = () => {
+          while (takenSlots.has(nextSlot)) {
+            nextSlot++;
+          }
+          takenSlots.add(nextSlot);
+          return nextSlot;
+        };
+
+        const list = memberList.map((m) => {
+          let assigned = assignedByBuyer.get(m.id);
+          if (!assigned) {
+            const slot = getNextUnusedSlot();
+            const isPass = (slot === 1 || slot === 3);
+            assigned = {
+              saleNumber: slot,
+              isPassup: isPass,
+              utr: null,
+              amount: 0,
+              beneficiaryId: undefined
+            };
+          }
+
+          const saleNum = assigned.saleNumber;
+          const isPassUp = assigned.isPassup;
+
+          if (isDirectLevel) {
+            return {
+              ...m,
+              level: 1,
+              sale_number: saleNum,
+              saleNum: saleNum,
+              saleNumber: saleNum,
+              is_passup: isPassUp,
+              isPassedUp: isPassUp,
+              flowType: isPassUp ? 'PASS_UP' : 'DIRECT_KEEP',
+              moneyReceived: (!isPassUp && assigned.amount) ? assigned.amount : (!isPassUp ? 5000 : 0),
+              utr: assigned.utr,
+              children: [] as any[]
+            };
+          } else {
+            // Level 2 (child of direct, grandchild of nodeId)
+            const isChildPassupToNode = Boolean(
+              (assigned.beneficiaryId && assigned.beneficiaryId === nodeId) ||
+              allPassups.some(p => p.original_referrer_id === m.sponsor_id && p.passed_to_upline_id === nodeId && p.sale_number === saleNum) ||
+              (isPassUp && (saleNum === 1 || saleNum === 3))
+            );
+
+            return {
+              ...m,
+              level: 2,
+              sale_number: saleNum,
+              saleNum: saleNum,
+              saleNumber: saleNum,
+              is_passup: isPassUp,
+              isPassedUp: isPassUp,
+              isChildPassupToYou: isChildPassupToNode,
+              didChildPayMe: isChildPassupToNode,
+              childMoney: (isChildPassupToNode && assigned.amount) ? assigned.amount : (isChildPassupToNode ? 5000 : 0),
+              utr: assigned.utr,
+              children: [] as any[]
+            };
+          }
+        });
+
+        // Strictly sort by sale_number ASC
+        list.sort((a, b) => (a.sale_number || 0) - (b.sale_number || 0));
+        return list;
+      }
+
+      // Compute Level 1
+      const level1List = computeDownlines(nodeId, directs, true);
+
+      // Compute Level 2 for each direct
+      const finalTree = level1List.map(directMember => {
+        const directChildrenRaw = subList.filter(s => s.sponsor_id === directMember.id);
+        const children = computeDownlines(directMember.id, directChildrenRaw, false);
+        return {
+          ...directMember,
+          children
+        };
+      });
+
+      return res.json({ success: true, tree: finalTree });
+    } catch (err: any) {
+      console.error('[Team Tree API] Server error:', err);
+      return res.status(500).json({ success: false, error: err.message, tree: [] });
+    }
+  });
+
   // Vite middleware in dev or Static in production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
