@@ -242,6 +242,14 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   };
 
   const activeKeys = merchantKeys.filter(k => k.is_active);
+  // Next Payment Receiver key sorted by monthly_received_amount ASC, priority_order ASC LIMIT 1
+  const nextReceiverKey = activeKeys.length > 0
+    ? [...activeKeys].sort((a, b) => 
+        (Number(a.monthly_received_amount) || 0) - (Number(b.monthly_received_amount) || 0) || 
+        (Number(a.priority_order) || 1) - (Number(b.priority_order) || 1)
+      )[0]
+    : null;
+
   const totalMonthlyVolume = merchantKeys.reduce((acc, k) => acc + Number(k.monthly_received_amount || 0), 0);
   const totalCombinedLimit = merchantKeys.reduce((acc, k) => acc + (k.monthly_limit ? Number(k.monthly_limit) : 0), 0);
   const isAnyLimitActive = merchantKeys.some(k => k.monthly_limit !== null && k.monthly_limit !== undefined && Number(k.monthly_limit) > 0);
@@ -467,6 +475,31 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 )}
               </div>
 
+              {/* Glowing Emerald Banner: Next Payment Receiver ZapKey */}
+              {nextReceiverKey && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/80 via-[#071913] to-emerald-950/40 border-2 border-emerald-500 shadow-[0_0_30px_rgba(16,185,129,0.35)] relative overflow-hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-300">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0 shadow-[0_0_15px_rgba(16,185,129,0.5)]">
+                      <Zap className="w-5 h-5 fill-emerald-400" />
+                    </div>
+                    <div>
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-black uppercase tracking-wider border border-emerald-400/40">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                        <span>⚡ NEXT PAYMENT RECEIVER (Agla Payment Is ZapKey Par Aayega)</span>
+                      </div>
+                      <div className="font-bold text-white text-sm sm:text-base mt-1 flex items-center gap-2">
+                        <span>{nextReceiverKey.paytm_merchant_name || 'Primary Gateway'}</span>
+                        <span className="text-emerald-400 font-mono text-xs">({maskZapKey(nextReceiverKey.zap_key)})</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="self-end sm:self-auto text-right font-mono text-xs text-slate-300">
+                    <span className="text-[10px] text-slate-400 block uppercase">Monthly Volume</span>
+                    <span className="font-bold text-emerald-400">₹{Number(nextReceiverKey.monthly_received_amount || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              )}
+
               {merchantKeys.length === 0 && !loadingKeys && (
                 <div className="p-8 rounded-2xl bg-[#050811] border border-dashed border-slate-800 text-center space-y-3">
                   <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
@@ -485,14 +518,19 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 const limit = key.monthly_limit !== null && key.monthly_limit !== undefined ? Number(key.monthly_limit) : null;
                 const received = Number(key.monthly_received_amount || 0);
                 const percent = limit && limit > 0 ? Math.min(100, Math.round((received / limit) * 100)) : null;
+                const isNextReceiver = nextReceiverKey && nextReceiverKey.id === key.id;
 
                 return (
                   <div
                     key={key.id}
-                    className="p-4 rounded-2xl bg-[#07090e] border border-[#1c2436] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                    className={`p-4 rounded-2xl bg-[#07090e] border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+                      isNextReceiver
+                        ? 'border-emerald-500/80 shadow-[0_0_20px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/50'
+                        : 'border-[#1c2436]'
+                    }`}
                   >
                     <div className="space-y-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-bold text-white text-sm">
                           {key.paytm_merchant_name || 'Primary Gateway'}
                         </span>
@@ -501,6 +539,12 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                         }`}>
                           {key.is_active ? 'ACTIVE' : 'PAUSED'}
                         </span>
+                        {isNextReceiver && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-black bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30 flex items-center gap-1 animate-pulse">
+                            <Zap className="w-3 h-3 fill-slate-950" />
+                            <span>⚡ NEXT PAYMENT RECEIVER (Agla Payment Is ZapKey Par Aayega)</span>
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs font-mono text-slate-400">
                         {maskZapKey(key.zap_key)}

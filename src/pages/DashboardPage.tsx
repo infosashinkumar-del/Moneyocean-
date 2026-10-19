@@ -14,7 +14,7 @@ import { AlertCircle, Zap, ArrowRight } from 'lucide-react';
 interface DashboardPageProps {
   initialTab?: string;
   onNavigateHome: () => void;
-  onNavigateCheckout: () => void;
+  onNavigateCheckout: (slotNumber?: number) => void;
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({

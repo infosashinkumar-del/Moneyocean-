@@ -1,3 +1,24 @@
+export interface SlotPackage {
+  slot_number: number;
+  slot_name: string;
+  price: number;
+  phase: number;
+  is_unlocked: boolean;
+  unlock_milestone_ids: number;
+  created_at?: string;
+  description?: string;
+  badge?: string;
+}
+
+export interface UserSlot {
+  id: string;
+  user_id: string;
+  slot_number: number;
+  is_active: boolean;
+  qualifying_sponsor_id?: string | null;
+  activated_at?: string;
+}
+
 export interface PlatformConfig {
   package_price?: number;
   reservation_lock_minutes?: number;
@@ -6,6 +27,7 @@ export interface PlatformConfig {
   platform_launch_date?: string;
   marketing_plan_pdf_url?: string;
   webhook_url?: string;
+  slot_packages?: SlotPackage[];
   [key: string]: any;
 }
 
@@ -82,6 +104,8 @@ export interface Transaction {
   zap_key_used: string;
   zap_key_hash?: string;
   webhook_signature?: string | null;
+  slot_number?: number;
+  generation_level?: number;
   created_at: string;
   updated_at?: string;
   buyer?: {
@@ -100,6 +124,8 @@ export interface PassupLog {
   sale_number: number;
   amount: number;
   passup_reason: string;
+  slot_number?: number;
+  generation_level?: number;
   buyer_name?: string | null;
   buyer_referral_code?: string | null;
   original_referrer_name: string | null;
@@ -161,12 +187,17 @@ export interface CheckoutResponse {
   paytm_button?: string;
   payment_url?: string;
   sale_number?: number;
+  slot_number?: number;
+  slot_name?: string;
   is_passup?: boolean;
   passup_reason?: string;
   beneficiary_id?: string;
   beneficiary_name?: string;
   beneficiary_referral_code?: string;
   beneficiary_zap_key?: string;
+  merchant_name?: string;
+  zap_key_masked?: string;
+  generation_level?: number;
   payment?: {
     amount_inr: number;
     zap_key: string;

@@ -12,13 +12,15 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { showToast } from '../components/Toast';
 import { UltraPayLogo } from '../components/UltraPayLogo';
+import { useLaunchCountdown } from '../components/LaunchCountdownTimer';
 
 interface LoginPageProps {
   onNavigate: (route: string) => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
-  const { refreshUserData } = useAuth();
+  const { refreshUserData, platformConfig } = useAuth();
+  const isPreLaunch = false;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -108,10 +110,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
               <UltraPayLogo size="lg" variant="vertical" subtitle="Har Second Settlement, Seedha Bank Account Mein." />
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold font-display text-white tracking-tight">
-              Welcome Back
+              {isPreLaunch ? 'VIP Member Sign In' : 'Welcome Back'}
             </h1>
             <p className="mt-1 text-xs sm:text-sm text-slate-400">
-              Access your partner dashboard
+              {isPreLaunch ? 'Access your pre-launch MoneyOcean partner ID' : 'Access your partner dashboard'}
             </p>
           </div>
 
@@ -185,7 +187,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
                   <span>Logging in...</span>
                 </>
               ) : (
-                <span>Login Dashboard</span>
+                <span>{isPreLaunch ? 'Sign In to VIP Account' : 'Login Dashboard'}</span>
               )}
             </button>
           </form>
@@ -198,7 +200,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
                 onClick={() => onNavigate('signup')}
                 className="text-[#e5a93c] hover:text-[#f3c64c] font-bold cursor-pointer transition-colors"
               >
-                Register Now
+                {isPreLaunch ? 'Pre-Launch VIP Registration' : 'Register Now'}
               </button>
             </p>
           </div>

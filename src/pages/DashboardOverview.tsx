@@ -44,18 +44,22 @@ import { StatCard } from '../components/StatCard';
 import { ReferralCard } from '../components/ReferralCard';
 import { UltraPayLogo } from '../components/UltraPayLogo';
 import { showToast } from '../components/Toast';
+import { OceanMatrixSlotsGrid } from '../components/OceanMatrixSlotsGrid';
 import { 
   getLiveReferralUrl, 
   getUserTransactions, 
   getUserIncomeTransactions,
   getUserCalendarMonthEarned, 
-  getUserIncomeOriginBreakdown 
+  getUserIncomeOriginBreakdown,
+  getUserMerchantKeys,
+  predictNextReceiverZapKey,
+  maskZapKey
 } from '../lib/supabase';
 import { Transaction } from '../types';
 
 interface DashboardOverviewProps {
   onNavigateTab: (tab: string) => void;
-  onNavigateCheckout: () => void;
+  onNavigateCheckout: (slotNumber?: number) => void;
 }
 
 const CustomChartTooltip: React.FC<any> = ({ active, payload }) => {
@@ -112,7 +116,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onNavigateTab,
   onNavigateCheckout
 }) => {
-  const { user, dashboardData, refreshUserData, packagePrice } = useAuth();
+  const { user, dashboardData, refreshUserData, packagePrice, platformConfig } = useAuth();
   const [copied, setCopied] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
@@ -128,8 +132,24 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const [chartMetric, setChartMetric] = useState<'all' | 'direct' | 'passup'>('all');
   const [incomeTransactions, setIncomeTransactions] = useState<Transaction[]>([]);
   const [loadingChartTx, setLoadingChartTx] = useState(false);
+  const [nextReceiverKey, setNextReceiverKey] = useState<any | null>(null);
+  const [loadingMerchantKeys, setLoadingMerchantKeys] = useState<boolean>(true);
 
   const referralUrl = user ? getLiveReferralUrl(user.referral_code) : '';
+
+  const loadMerchantKeys = async () => {
+    if (!user?.id) return;
+    setLoadingMerchantKeys(true);
+    try {
+      const keys = await getUserMerchantKeys(user.id);
+      const nextKey = predictNextReceiverZapKey(keys);
+      setNextReceiverKey(nextKey);
+    } catch (err) {
+      console.warn('Error loading merchant keys in dashboard:', err);
+    } finally {
+      setLoadingMerchantKeys(false);
+    }
+  };
 
   useEffect(() => {
     if (user?.id) {
@@ -137,6 +157,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       loadCalendarMonthEarned();
       loadIncomeOriginBreakdown();
       loadChartTransactions();
+      loadMerchantKeys();
     }
   }, [user]);
 
@@ -194,7 +215,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       loadRecentTx(), 
       loadCalendarMonthEarned(),
       loadIncomeOriginBreakdown(),
-      loadChartTransactions()
+      loadChartTransactions(),
+      loadMerchantKeys()
     ]);
     setRefreshing(false);
     showToast('info', 'Synced', 'Dashboard stats updated with live blockchain ledger.');
@@ -208,7 +230,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
     setTimeout(() => setCopied(false), 2500);
   };
 
-  const unitPrice = packagePrice;
+  const unitPrice = packagePrice || 1000;
 
   const handleShareWhatsapp = () => {
     if (!referralUrl) return;
@@ -402,6 +424,27 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold font-display text-white tracking-tight">
             Welcome back, <span className="emerald-gradient-text">{user?.full_name || 'Member'}</span>
           </h2>
+
+          {/* Compact Next Payment Receiver ZapKey Status Pill */}
+          <div className="pt-2 flex flex-wrap items-center gap-2">
+            {nextReceiverKey ? (
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-mono shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-slate-300">Next Receiver ZapKey:</span>
+                <strong className="text-white font-bold">{nextReceiverKey.paytm_merchant_name || 'Primary Gateway'}</strong>
+                <span className="text-emerald-400">({maskZapKey(nextReceiverKey.zap_key)})</span>
+              </div>
+            ) : !loadingMerchantKeys ? (
+              <button
+                onClick={() => onNavigateTab('profile')}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-950/80 border border-amber-500/40 text-amber-300 hover:bg-amber-900/60 text-xs font-mono transition-colors cursor-pointer"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>No Active ZapKey: Tap to configure UPI receiving key in Settings</span>
+                <ArrowRight className="w-3 h-3 text-amber-400" />
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="relative z-10 shrink-0">
@@ -504,6 +547,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           badgeType="warning"
         />
       </div>
+
+      {/* Ocean Matrix Slots (Phase 1 & Phase 2 Multi-Tier Architecture) */}
+      <OceanMatrixSlotsGrid 
+        user={user} 
+        onNavigateCheckout={onNavigateCheckout} 
+      />
 
       {/* Main Grid: Earnings Chart (2 cols) & Income Breakdown Snapshot (1 col) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
@@ -994,7 +1043,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 <tr className="border-b border-[#1c2436] text-slate-400 font-mono text-[10px] sm:text-[11px] uppercase tracking-wider">
                   <th className="pb-3 px-2 font-semibold">ORDER / DATE</th>
                   <th className="pb-3 px-2 font-semibold">BUYER</th>
-                  <th className="pb-3 px-2 font-semibold">COMMISSION TYPE</th>
+                  <th className="pb-3 px-2 font-semibold">SLOT & GENERATION</th>
                   <th className="pb-3 px-2 font-semibold">AMOUNT</th>
                   <th className="pb-3 px-2 font-semibold text-right">UTR STATUS</th>
                 </tr>
@@ -1008,7 +1057,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     return !txType.includes('VIP') && !txType.includes('FREE_PASS') && !orderId.includes('VIP_SEED') && !utr.startsWith('SEED_');
                   })
                   .map((tx) => {
-                  const isPassup = tx.transaction_type?.includes('PASSUP') || tx.transaction_type?.includes('Pass');
                   return (
                     <tr key={tx.id || tx.order_id} className="hover:bg-[#121824]/80 transition-colors">
                       <td className="py-3.5 px-2">
@@ -1022,13 +1070,26 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                         <div className="text-[10px] font-mono text-slate-400 truncate max-w-[150px]">{tx.buyer?.email || ''}</div>
                       </td>
                       <td className="py-3.5 px-2">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold whitespace-nowrap ${
-                          isPassup 
-                            ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' 
-                            : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                        }`}>
-                          {isPassup ? '2-Up Pass-Up' : '100% Direct'}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {/* Slot Badge */}
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 whitespace-nowrap">
+                            Slot #{tx.slot_number || 1}
+                          </span>
+                          {/* Generation Badge */}
+                          {(!tx.generation_level || tx.generation_level === 1) ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-500/40 whitespace-nowrap">
+                              🔥 Gen-1 (Direct 100%)
+                            </span>
+                          ) : tx.generation_level === 2 ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/80 text-amber-300 border border-amber-500/40 whitespace-nowrap">
+                              🚀 Gen-2 (2-Up Pass-Up)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-950/80 text-amber-300 border border-purple-500/50 shadow-sm shadow-purple-500/20 whitespace-nowrap">
+                              👑 Gen-{tx.generation_level} (Deep Matrix Profit)
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-2 font-bold text-emerald-400 text-sm whitespace-nowrap">
                         ₹{Number(tx.amount !== undefined && tx.amount !== null ? tx.amount : unitPrice).toLocaleString('en-IN')}

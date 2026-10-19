@@ -14,6 +14,8 @@ import {
 import { supabase, validateReferralCode } from '../lib/supabase';
 import { showToast } from '../components/Toast';
 import { UltraPayLogo } from '../components/UltraPayLogo';
+import { useAuth } from '../context/AuthContext';
+import { LaunchCountdownTimer, useLaunchCountdown, LaunchBadge } from '../components/LaunchCountdownTimer';
 
 interface SignUpPageProps {
   onNavigate: (route: string) => void;
@@ -21,6 +23,10 @@ interface SignUpPageProps {
 }
 
 export const SignUpPage: React.FC<SignUpPageProps> = ({ onNavigate, prefilledReferralCode = '' }) => {
+  const { platformConfig } = useAuth();
+  const launchDate = platformConfig?.platform_launch_date || '2026-10-27T20:00:00+05:30';
+  const countdown = useLaunchCountdown(launchDate);
+  const isPreLaunch = !countdown.isComplete;
   const [sponsorCode, setSponsorCode] = useState(() => {
     return prefilledReferralCode || (typeof window !== 'undefined' ? sessionStorage.getItem('mo_sponsor_code') || '' : '');
   });

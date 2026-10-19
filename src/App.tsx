@@ -74,13 +74,16 @@ function AppContent() {
     }
   }, [authUser, user, loading, currentRoute]);
 
-  const navigateTo = (route: ViewRoute, tab?: string, refCode?: string) => {
+  const [checkoutSlotNumber, setCheckoutSlotNumber] = useState<number | undefined>(undefined);
+
+  const navigateTo = (route: ViewRoute, tab?: string, refCode?: string, slot?: number) => {
     if (refCode) {
       setInitialReferralCode(refCode);
     }
     if (tab) {
       setDashboardTab(tab);
     }
+    setCheckoutSlotNumber(slot);
     setCurrentRoute(route);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -113,12 +116,13 @@ function AppContent() {
         <DashboardPage
           initialTab={dashboardTab}
           onNavigateHome={() => navigateTo('landing')}
-          onNavigateCheckout={() => navigateTo('checkout')}
+          onNavigateCheckout={(slot) => navigateTo('checkout', undefined, undefined, slot)}
         />
       )}
 
       {currentRoute === 'checkout' && (
         <CheckoutPage
+          selectedSlotNumber={checkoutSlotNumber}
           onNavigateDashboard={() => navigateTo('dashboard')}
         />
       )}

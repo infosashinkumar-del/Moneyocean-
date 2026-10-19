@@ -7,7 +7,9 @@ import {
   CheckoutResponse, 
   Transaction,
   UserMerchantKey,
-  PlatformConfig
+  PlatformConfig,
+  SlotPackage,
+  UserSlot
 } from '../types';
 
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
@@ -67,14 +69,165 @@ export function normalizeReferralVariants(code: string): string[] {
   return Array.from(variants);
 }
 
+// Default 8-Slot Multi-Tier Architecture (All 8 Live Unlocked Slots)
+export const DEFAULT_SLOT_PACKAGES: SlotPackage[] = [
+  {
+    slot_number: 1,
+    slot_name: 'Starter Ocean',
+    price: 500,
+    phase: 1,
+    is_unlocked: true,
+    unlock_milestone_ids: 0
+  },
+  {
+    slot_number: 2,
+    slot_name: 'Bronze Wave',
+    price: 1000,
+    phase: 1,
+    is_unlocked: true,
+    unlock_milestone_ids: 0
+  },
+  {
+    slot_number: 3,
+    slot_name: 'Silver Tide',
+    price: 1500,
+    phase: 1,
+    is_unlocked: true,
+    unlock_milestone_ids: 0
+  },
+  {
+    slot_number: 4,
+    slot_name: 'Coral Reef',
+    price: 2000,
+    phase: 1,
+    is_unlocked: true,
+    unlock_milestone_ids: 0
+  },
+  {
+    slot_number: 5,
+    slot_name: 'Gold Current',
+    price: 5000,
+    phase: 1,
+    is_unlocked: true,
+    unlock_milestone_ids: 0
+  },
+  {
+    slot_number: 6,
+    slot_name: 'Platinum Pearl',
+    price: 10000,
+    phase: 1,
+    is_unlocked: true,
+    unlock_milestone_ids: 0
+  },
+  {
+    slot_number: 7,
+    slot_name: 'Diamond Tsunami',
+    price: 25000,
+    phase: 1,
+    is_unlocked: true,
+    unlock_milestone_ids: 0
+  },
+  {
+    slot_number: 8,
+    slot_name: 'Crown Ocean',
+    price: 50000,
+    phase: 1,
+    is_unlocked: true,
+    unlock_milestone_ids: 0
+  }
+];
+
+// Helper to mask ZapKey for clean display
+export function maskZapKey(key?: string | null): string {
+  if (!key) return '';
+  const trimmed = String(key).trim();
+  if (trimmed.length <= 10) return trimmed;
+  return `${trimmed.slice(0, 6)}...${trimmed.slice(-4)}`;
+}
+
+// Next-ZapKey Queue predictor based on backend selection rule:
+// monthly_received_amount ASC, priority_order ASC LIMIT 1
+export function predictNextReceiverZapKey(keys: any[]): any | null {
+  if (!keys || !Array.isArray(keys)) return null;
+  const activeKeys = keys.filter(k => k.is_active);
+  if (activeKeys.length === 0) return null;
+  activeKeys.sort((a, b) => 
+    (Number(a.monthly_received_amount) || 0) - (Number(b.monthly_received_amount) || 0) || 
+    (Number(a.priority_order) || 1) - (Number(b.priority_order) || 1)
+  );
+  return activeKeys[0];
+}
+
+// Helper to fetch all 7 slots from public.slot_packages ordered by slot_number ASC
+export async function getSlotPackages(): Promise<SlotPackage[]> {
+  try {
+    const { data, error } = await supabase
+      .from('slot_packages')
+      .select('*')
+      .order('slot_number', { ascending: true });
+
+    if (!error && data && Array.isArray(data) && data.length > 0) {
+      return data.map((row: any) => ({
+        slot_number: Number(row.slot_number),
+        slot_name: String(row.slot_name || `Slot ${row.slot_number}`),
+        price: Number(row.price),
+        phase: Number(row.phase || (row.slot_number <= 3 ? 1 : 2)),
+        is_unlocked: Boolean(row.is_unlocked),
+        unlock_milestone_ids: Number(row.unlock_milestone_ids || 0),
+        created_at: row.created_at
+      }));
+    }
+  } catch (err) {
+    console.warn('Error fetching slot_packages from Supabase:', err);
+  }
+  return DEFAULT_SLOT_PACKAGES;
+}
+
+// Helper to fetch user's active rows from public.user_slots
+export async function getUserActiveSlots(userId: string): Promise<UserSlot[]> {
+  if (!userId) return [];
+  try {
+    const { data, error } = await supabase
+      .from('user_slots')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .order('slot_number', { ascending: true });
+
+    if (!error && data) {
+      return data as UserSlot[];
+    }
+  } catch (err) {
+    console.warn('Error fetching user_slots from Supabase:', err);
+  }
+  return [];
+}
+
+// Helper to get total active platform IDs for milestone progress
+export async function getActiveUsersCount(): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true);
+
+    if (!error && typeof count === 'number') {
+      return count;
+    }
+  } catch (err) {
+    console.warn('Error fetching active users count:', err);
+  }
+  return 0;
+}
+
 // Helper to fetch live platform configurations (e.g. package_price, reservation_lock_minutes, fallback_zap_key)
 export async function getPlatformConfigs(): Promise<PlatformConfig> {
   const defaultConfig: PlatformConfig = {
-    package_price: 0,
+    package_price: 500,
     reservation_lock_minutes: 8,
     fallback_zap_key: '',
     referral_cutoff_date: '',
-    platform_launch_date: '',
+    platform_launch_date: '2026-10-27T20:00:00+05:30',
     marketing_plan_pdf_url: 'https://gedbbysyehtdaqgkrmqk.supabase.co/storage/v1/object/public/marketing%20plan/moneyoceantop.pdf',
     webhook_url: 'https://ultrapay-webhook-shield.ultrapay.workers.dev'
   };
@@ -89,7 +242,14 @@ export async function getPlatformConfigs(): Promise<PlatformConfig> {
         const mapped: Record<string, any> = {};
         for (const row of data) {
           const k = row.key || row.config_key;
-          const v = row.value !== undefined ? row.value : row.config_value;
+          let v = row.value !== undefined ? row.value : row.config_value;
+          if (typeof v === 'string') {
+            try {
+              if (v.startsWith('[') || v.startsWith('{')) {
+                v = JSON.parse(v);
+              }
+            } catch {}
+          }
           if (k) mapped[k] = v;
         }
         return {
@@ -97,7 +257,8 @@ export async function getPlatformConfigs(): Promise<PlatformConfig> {
           ...mapped,
           package_price: Number(mapped.package_price !== undefined ? mapped.package_price : defaultConfig.package_price),
           reservation_lock_minutes: Number(mapped.reservation_lock_minutes || defaultConfig.reservation_lock_minutes),
-          fallback_zap_key: mapped.fallback_zap_key ? String(mapped.fallback_zap_key).trim() : ''
+          fallback_zap_key: mapped.fallback_zap_key ? String(mapped.fallback_zap_key).trim() : '',
+          platform_launch_date: mapped.platform_launch_date || defaultConfig.platform_launch_date
         };
       } else {
         const row = data[0];
@@ -106,7 +267,8 @@ export async function getPlatformConfigs(): Promise<PlatformConfig> {
           ...row,
           package_price: Number(row.package_price !== undefined ? row.package_price : (row.amount !== undefined ? row.amount : defaultConfig.package_price)),
           reservation_lock_minutes: Number(row.reservation_lock_minutes || defaultConfig.reservation_lock_minutes),
-          fallback_zap_key: row.fallback_zap_key ? String(row.fallback_zap_key).trim() : ''
+          fallback_zap_key: row.fallback_zap_key ? String(row.fallback_zap_key).trim() : '',
+          platform_launch_date: row.platform_launch_date || defaultConfig.platform_launch_date
         };
       }
     }
@@ -201,15 +363,17 @@ export async function validateReferralCode(p_referral_code: string): Promise<Val
 // 2. Real P2P Checkout generation via Supabase RPC (Strict Server-Side Allocation)
 export async function generateP2PCheckout(
   p_referral_code: string, 
-  p_buyer_id: string
+  p_buyer_id: string,
+  p_slot_number: number = 1
 ): Promise<CheckoutResponse> {
   const cleanCode = p_referral_code.trim().toUpperCase();
   
   try {
-    // Strictly invoke single-candidate RPC with exact 2 parameters
+    // Invoke RPC with p_referral_code, p_buyer_id, and p_slot_number
     const { data, error } = await supabase.rpc('generate_p2p_checkout', {
       p_referral_code: cleanCode,
-      p_buyer_id
+      p_buyer_id,
+      p_slot_number
     });
 
     if (error) {
@@ -267,6 +431,9 @@ export async function generateP2PCheckout(
       success: true,
       order_id: data.order_id,
       zap_key: activeZapKey,
+      amount: pkgAmount,
+      slot_number: Number(data.slot_number || p_slot_number),
+      slot_name: String(data.slot_name || ''),
       routing_info: {
         beneficiary_id: benId,
         beneficiary_name: benName,
@@ -537,6 +704,8 @@ export async function getUserPassupLogs(p_user_id: string): Promise<PassupLog[]>
         sale_number,
         amount,
         passup_reason,
+        slot_number,
+        generation_level,
         created_at,
         original_referrer_id,
         passed_to_upline_id,
@@ -575,13 +744,15 @@ export async function getUserPassupLogs(p_user_id: string): Promise<PassupLog[]>
         const orig = l.original_referrer || fallbackUsers.get(l.original_referrer_id);
         const upline = l.passed_to || fallbackUsers.get(l.passed_to_upline_id);
 
-        const dedupKey = `${l.buyer_user_id || l.id}_${l.sale_number}`;
+        const dedupKey = `${l.buyer_user_id || l.id}_${l.sale_number}_${l.slot_number || 1}`;
         seenKeys.add(dedupKey);
 
         result.push({
           sale_number: Number(l.sale_number || 1),
           amount: Number(l.amount || 0),
           passup_reason: l.passup_reason || '1ST_3RD_RULE',
+          slot_number: l.slot_number ? Number(l.slot_number) : 1,
+          generation_level: l.generation_level ? Number(l.generation_level) : 2,
           buyer_name: buyer?.full_name || 'Member Sale',
           buyer_referral_code: buyer?.referral_code || null,
           original_referrer_name: orig?.full_name || 'Direct Sponsor',
@@ -608,6 +779,8 @@ export async function getUserPassupLogs(p_user_id: string): Promise<PassupLog[]>
           transaction_type,
           amount,
           payment_status,
+          slot_number,
+          generation_level,
           created_at,
           buyer:buyer_user_id ( full_name, email, referral_code ),
           beneficiary:beneficiary_user_id ( full_name, email, referral_code ),
@@ -637,7 +810,7 @@ export async function getUserPassupLogs(p_user_id: string): Promise<PassupLog[]>
           if (!isPassup) continue;
 
           const saleNum = t.sale_number || (t.transaction_type?.includes('1') ? 1 : t.transaction_type?.includes('3') ? 3 : 1);
-          const dedupKey = `${t.buyer_user_id}_${saleNum}`;
+          const dedupKey = `${t.buyer_user_id}_${saleNum}_${t.slot_number || 1}`;
           if (seenKeys.has(dedupKey)) continue;
           seenKeys.add(dedupKey);
 
@@ -645,6 +818,8 @@ export async function getUserPassupLogs(p_user_id: string): Promise<PassupLog[]>
             sale_number: saleNum,
             amount: Number(t.amount || 0),
             passup_reason: t.transaction_type || 'PASSUP_QUALIFICATION',
+            slot_number: t.slot_number ? Number(t.slot_number) : 1,
+            generation_level: t.generation_level ? Number(t.generation_level) : 2,
             buyer_name: t.buyer?.full_name || 'Member Sale',
             buyer_referral_code: t.buyer?.referral_code || null,
             original_referrer_name: t.sponsor?.full_name || 'Direct Sponsor',
@@ -720,7 +895,7 @@ export async function getUserTransactions(userId: string, limit = 20): Promise<T
       .from('transactions')
       .select(`
         id, order_id, buyer_user_id, beneficiary_user_id, transaction_type, 
-        amount, utr_number, payment_status, zap_key_used, created_at,
+        amount, utr_number, payment_status, zap_key_used, slot_number, generation_level, created_at,
         buyer:buyer_user_id ( full_name, email ),
         beneficiary:beneficiary_user_id ( full_name, email )
       `)
@@ -755,7 +930,7 @@ export async function getUserIncomeTransactions(userId: string, limit = 200): Pr
       .from('transactions')
       .select(`
         id, order_id, buyer_user_id, beneficiary_user_id, transaction_type, 
-        amount, utr_number, payment_status, zap_key_used, created_at,
+        amount, utr_number, payment_status, zap_key_used, slot_number, generation_level, created_at,
         buyer:buyer_user_id ( full_name, email ),
         beneficiary:beneficiary_user_id ( full_name, email )
       `)
@@ -997,16 +1172,16 @@ export async function getNodeDownlines(nodeId: string): Promise<any[]> {
         .order('joining_date', { ascending: true }),
       supabase
         .from('transactions')
-        .select('buyer_user_id, beneficiary_user_id, sponsor_id, sale_number, is_passup, transaction_type, amount, payment_status, utr_number, created_at')
+        .select('buyer_user_id, beneficiary_user_id, sponsor_id, sale_number, is_passup, transaction_type, amount, payment_status, utr_number, slot_number, generation_level, created_at')
         .eq('payment_status', 'SUCCESS')
         .or(`sponsor_id.eq.${nodeId},beneficiary_user_id.eq.${nodeId},buyer_user_id.in.(${directIds.join(',')}),sponsor_id.in.(${directIds.join(',')})`),
       supabase
         .from('passup_logs')
-        .select('original_referrer_id, passed_to_upline_id, sale_number, amount, passup_reason, created_at')
+        .select('original_referrer_id, passed_to_upline_id, sale_number, amount, passup_reason, slot_number, generation_level, created_at')
         .or(`original_referrer_id.eq.${nodeId},passed_to_upline_id.eq.${nodeId},original_referrer_id.in.(${directIds.join(',')})`),
       supabase
         .from('sale_ledger')
-        .select('sale_number, sponsor_id, buyer_user_id, beneficiary_user_id, is_passup, amount, created_at')
+        .select('sale_number, sponsor_id, buyer_user_id, beneficiary_user_id, is_passup, amount, slot_number, generation_level, created_at')
         .or(`sponsor_id.eq.${nodeId},beneficiary_user_id.eq.${nodeId},sponsor_id.in.(${directIds.join(',')})`)
     ]);
 
@@ -1021,8 +1196,10 @@ export async function getNodeDownlines(nodeId: string): Promise<any[]> {
       const takenSlots = new Set<number>();
 
       for (const m of memberList) {
-        const mTx = allTx.find(t => t.buyer_user_id === m.id);
-        const mLedger = allLedger.find(l => l.buyer_user_id === m.id && l.sponsor_id === sponsorId);
+        const buyerTxs = allTx.filter(t => t.buyer_user_id === m.id);
+        const buyerLedger = allLedger.filter(l => l.buyer_user_id === m.id && l.sponsor_id === sponsorId);
+        const mTx = buyerTxs[0];
+        const mLedger = buyerLedger[0];
         const mPassup = allPassups.find(p => p.original_referrer_id === sponsorId && (p.sale_number === mTx?.sale_number || p.sale_number === mLedger?.sale_number));
 
         const rawNum = mLedger?.sale_number ?? mTx?.sale_number ?? mPassup?.sale_number;
@@ -1037,11 +1214,19 @@ export async function getNodeDownlines(nodeId: string): Promise<any[]> {
             (mTx && mTx.beneficiary_user_id !== sponsorId) ??
             (num === 1 || num === 3)
           );
+
+          // Sum settled transaction/ledger amounts across all active slots for that buyer where the user is the beneficiary
+          const nodeBeneficiaryTxs = buyerTxs.filter(t => t.beneficiary_user_id === nodeId);
+          const nodeBeneficiaryLedger = allLedger.filter(l => l.buyer_user_id === m.id && l.beneficiary_user_id === nodeId);
+          const totalSettledAmt = nodeBeneficiaryTxs.reduce((sum, t) => sum + Number(t.amount || 0), 0) ||
+                                  nodeBeneficiaryLedger.reduce((sum, l) => sum + Number(l.amount || 0), 0) ||
+                                  Number(mLedger?.amount || mTx?.amount || 0);
+
           assignedByBuyer.set(m.id, {
             saleNumber: num,
             isPassup: isPass,
             utr: mTx?.utr_number || null,
-            amount: Number(mLedger?.amount || mTx?.amount || 0),
+            amount: totalSettledAmt,
             beneficiaryId: mLedger?.beneficiary_user_id || mTx?.beneficiary_user_id
           });
         }
@@ -1084,7 +1269,7 @@ export async function getNodeDownlines(nodeId: string): Promise<any[]> {
             is_passup: isPassUp,
             isPassedUp: isPassUp,
             flowType: isPassUp ? 'PASS_UP' : 'DIRECT_KEEP',
-            moneyReceived: (!isPassUp && assigned.amount) ? assigned.amount : (!isPassUp ? 5000 : 0),
+            moneyReceived: (!isPassUp && assigned.amount) ? assigned.amount : 0,
             utr: assigned.utr,
             children: [] as any[]
           };
@@ -1105,7 +1290,7 @@ export async function getNodeDownlines(nodeId: string): Promise<any[]> {
             isPassedUp: isPassUp,
             isChildPassupToYou: isChildPassupToNode,
             didChildPayMe: isChildPassupToNode,
-            childMoney: (isChildPassupToNode && assigned.amount) ? assigned.amount : (isChildPassupToNode ? 5000 : 0),
+            childMoney: (isChildPassupToNode && assigned.amount) ? assigned.amount : 0,
             utr: assigned.utr,
             children: [] as any[]
           };

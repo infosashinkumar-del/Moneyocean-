@@ -154,9 +154,29 @@ export const PassupLogs: React.FC = () => {
                   const isReceived = log.passed_to_name === user?.full_name;
                   return (
                     <tr key={index} className="hover:bg-[#091122]/50 transition-colors">
-                      {/* Sale # */}
+                      {/* Sale # & Badges */}
                       <td className="py-4 px-4 font-mono font-bold text-white whitespace-nowrap">
-                        Sale #{log.sale_number}
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-sm">Sale #{log.sale_number}</span>
+                          <div className="flex flex-wrap items-center gap-1 font-sans">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9.5px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/40">
+                              Slot #{log.slot_number || 1}
+                            </span>
+                            {(!log.generation_level || log.generation_level === 1) ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9.5px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/40">
+                                🔥 Gen-1 (Direct 100%)
+                              </span>
+                            ) : log.generation_level === 2 ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9.5px] font-bold bg-amber-950 text-amber-300 border border-amber-500/40">
+                                🚀 Gen-2 (2-Up Pass-Up)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9.5px] font-bold bg-purple-950 text-amber-300 border border-purple-500/50">
+                                👑 Gen-{log.generation_level} (Deep Matrix Profit)
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </td>
 
                       {/* Passed-Up Sale Member Name */}

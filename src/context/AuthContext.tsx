@@ -24,7 +24,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig | null>(null);
-  const [packagePrice, setPackagePrice] = useState<number>(0);
+  const [packagePrice, setPackagePrice] = useState<number>(1000);
   const [loading, setLoading] = useState<boolean>(true);
 
   const fetchPlatformConfig = async () => {
@@ -32,7 +32,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const cfg = await getPlatformConfigs();
       if (cfg) {
         setPlatformConfig(cfg);
-        if (cfg.package_price !== undefined && !isNaN(Number(cfg.package_price))) {
+        if (cfg.package_price !== undefined && !isNaN(Number(cfg.package_price)) && Number(cfg.package_price) > 0) {
           setPackagePrice(Number(cfg.package_price));
         }
       }

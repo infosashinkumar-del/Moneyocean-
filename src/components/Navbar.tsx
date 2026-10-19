@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { ArrowRight, Menu, X, ChevronRight, User as UserIcon, FileText } from 'lucide-react';
+import { ArrowRight, Menu, X, ChevronRight, User as UserIcon, FileText, Flame } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { MarketingPlanModal } from './MarketingPlanModal';
 import { UltraPayLogo } from './UltraPayLogo';
+import { LaunchCountdownTimer, useLaunchCountdown, LaunchBadge } from './LaunchCountdownTimer';
 
 interface NavbarProps {
   onNavigate: (route: string) => void;
@@ -13,10 +14,10 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentRoute }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showMarketingModal, setShowMarketingModal] = useState(false);
   const { authUser } = useAuth();
+  const isPreLaunch = false;
 
   const navLinks = [
     { label: 'How It Works', id: 'how-it-works' },
-    { label: 'Pass-Up System', id: 'how-it-works' },
     { label: 'Mission & Vision', id: 'mission-vision' },
     { label: 'FAQ', id: 'faq' }
   ];
@@ -66,7 +67,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentRoute }) => {
           </button>
         </nav>
 
-        {/* Action Buttons: Visible on both Desktop and Mobile */}
+        {/* Action Buttons: Sign In / Countdown Timer in place of Signup */}
         <div className="flex items-center gap-2 sm:gap-3">
           {authUser ? (
             <button
@@ -86,6 +87,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentRoute }) => {
               >
                 Sign In
               </button>
+
               <button
                 onClick={() => onNavigate('signup')}
                 className="flex items-center gap-1 sm:gap-2 px-3 py-1.5 sm:px-5 sm:py-2.5 rounded-xl gold-btn-gradient font-bold text-xs sm:text-sm cursor-pointer shadow-md shadow-amber-500/20"

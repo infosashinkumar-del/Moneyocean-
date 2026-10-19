@@ -14,7 +14,9 @@ import {
   Target, 
   Compass, 
   DollarSign,
-  FileText 
+  FileText,
+  Flame,
+  Sparkles
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Navbar } from '../components/Navbar';
@@ -22,6 +24,7 @@ import { Footer } from '../components/Footer';
 import { useAuth } from '../context/AuthContext';
 import { MarketingPlanModal } from '../components/MarketingPlanModal';
 import { ThreeDMatrixCard } from '../components/ThreeDMatrixCard';
+import { LaunchCountdownTimer, useLaunchCountdown, LaunchBadge } from '../components/LaunchCountdownTimer';
 
 interface LandingPageProps {
   onNavigate: (route: string) => void;
@@ -30,8 +33,10 @@ interface LandingPageProps {
 export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
   const { packagePrice, platformConfig } = useAuth();
   const [showMarketingModal, setShowMarketingModal] = useState(false);
-  const unitPrice = packagePrice;
+  const unitPrice = packagePrice || 1000;
   const lockMins = platformConfig?.reservation_lock_minutes || 8;
+  const launchDate = platformConfig?.platform_launch_date || '2026-10-27T20:00:00+05:30';
+  const isPreLaunch = false;
 
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
@@ -77,10 +82,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
               transition={{ duration: 0.6 }}
               className="lg:col-span-7 text-center lg:text-left space-y-6"
             >
-              {/* Trust Badge */}
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-950/60 border border-amber-500/40 text-amber-300 text-xs font-mono font-semibold">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>AUTONOMOUS PEER-TO-PEER NETWORK</span>
+              {/* Trust & Pre-Launch Status Badge */}
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2">
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-950/60 border border-amber-500/40 text-amber-300 text-xs font-mono font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>AUTONOMOUS PEER-TO-PEER NETWORK</span>
+                </div>
+                {isPreLaunch && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-200 text-xs font-mono font-bold shadow-md shadow-amber-500/10">
+                    <Flame className="w-3.5 h-3.5 text-amber-400 animate-bounce" />
+                    <span>COUNTDOWN ACTIVE</span>
+                  </div>
+                )}
               </div>
 
               {/* Headline */}
@@ -100,7 +113,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                 Earn <span className="text-[#e5a93c] font-semibold font-mono">₹{unitPrice.toLocaleString('en-IN')}</span> per sale settled instantly via direct UPI.
               </p>
 
-              {/* CTA buttons with Direct Sign In and Join */}
+              {/* CTA buttons */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center lg:justify-start gap-3 sm:gap-4 pt-2">
                 <button
                   onClick={() => onNavigate('signup')}
@@ -300,7 +313,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
               </button>
               <button
                 onClick={() => onNavigate('signup')}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-xl gold-btn-gradient font-bold text-sm shrink-0 cursor-pointer"
+                className="w-full sm:w-auto px-6 py-3.5 rounded-xl gold-btn-gradient font-bold text-sm shrink-0 cursor-pointer shadow-lg shadow-amber-500/20"
               >
                 Activate Your Earning Slot
               </button>
@@ -360,14 +373,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
               onClick={() => onNavigate('signup')}
-              className="inline-flex items-center gap-3 px-8 py-4 rounded-xl gold-btn-gradient font-bold text-base cursor-pointer"
+              className="inline-flex items-center gap-3 px-8 py-4 rounded-xl gold-btn-gradient font-bold text-base cursor-pointer shadow-xl shadow-amber-500/25"
             >
               <span>Create Free Account & Start</span>
               <ArrowRight className="w-5 h-5 text-slate-950" />
             </button>
             <button
               onClick={() => onNavigate('login')}
-              className="px-6 py-4 rounded-xl bg-[#111724] hover:bg-[#182133] border border-slate-700 text-slate-200 hover:text-white font-semibold text-base transition-all cursor-pointer"
+              className="px-6 py-4 rounded-xl bg-[#111724] hover:bg-[#182133] border border-slate-700 text-slate-200 hover:text-white font-semibold text-base transition-all cursor-pointer shadow-md"
             >
               <span>Member Sign In</span>
             </button>

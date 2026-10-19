@@ -113,6 +113,7 @@ export const TransactionHistory: React.FC = () => {
             <thead className="bg-[#050811] text-slate-400 font-mono uppercase tracking-wider text-[10px] border-b border-slate-800">
               <tr>
                 <th className="py-3.5 px-4">Order ID & Type</th>
+                <th className="py-3.5 px-4">Slot & Generation</th>
                 <th className="py-3.5 px-4">Amount (INR)</th>
                 <th className="py-3.5 px-4">Status</th>
                 <th className="py-3.5 px-4">UTR Reference</th>
@@ -123,14 +124,14 @@ export const TransactionHistory: React.FC = () => {
             <tbody className="divide-y divide-slate-800/60">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-16 text-center text-slate-400">
+                  <td colSpan={7} className="py-16 text-center text-slate-400">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto text-emerald-400 mb-2" />
                     <span>Loading transactions from live database...</span>
                   </td>
                 </tr>
               ) : filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-16 text-center text-slate-500">
+                  <td colSpan={7} className="py-16 text-center text-slate-500">
                     <Receipt className="w-10 h-10 mx-auto text-slate-600 mb-2" />
                     <p className="font-semibold text-slate-400">No transactions recorded yet</p>
                     <p className="text-[11px] text-slate-500 mt-1">
@@ -147,6 +148,28 @@ export const TransactionHistory: React.FC = () => {
                       <td className="py-4 px-4 font-mono">
                         <span className="text-white font-bold block">{tx.order_id}</span>
                         <span className="text-[10px] text-teal-400">{tx.transaction_type}</span>
+                      </td>
+
+                      {/* Slot & Generation Badges */}
+                      <td className="py-4 px-4">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/40 whitespace-nowrap">
+                            Slot #{tx.slot_number || 1}
+                          </span>
+                          {(!tx.generation_level || tx.generation_level === 1) ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/40 whitespace-nowrap">
+                              🔥 Gen-1 (Direct 100%)
+                            </span>
+                          ) : tx.generation_level === 2 ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-500/40 whitespace-nowrap">
+                              🚀 Gen-2 (2-Up Pass-Up)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-950 text-amber-300 border border-purple-500/50 shadow-sm shadow-purple-500/20 whitespace-nowrap">
+                              👑 Gen-{tx.generation_level} (Deep Matrix Profit)
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Amount */}

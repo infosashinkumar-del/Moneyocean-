@@ -306,6 +306,8 @@ async function startServer() {
           sale_number,
           amount,
           passup_reason,
+          slot_number,
+          generation_level,
           created_at,
           original_referrer_id,
           passed_to_upline_id,
@@ -348,13 +350,15 @@ async function startServer() {
           const orig = l.original_referrer || fallbackUsers.get(l.original_referrer_id);
           const upline = l.passed_to || fallbackUsers.get(l.passed_to_upline_id);
 
-          const dedupKey = `${l.buyer_user_id || l.id}_${l.sale_number}`;
+          const dedupKey = `${l.buyer_user_id || l.id}_${l.sale_number}_${l.slot_number || 1}`;
           seenKeys.add(dedupKey);
 
           result.push({
             sale_number: Number(l.sale_number || 1),
             amount: Number(l.amount || 0),
             passup_reason: l.passup_reason || '1ST_3RD_RULE',
+            slot_number: l.slot_number ? Number(l.slot_number) : 1,
+            generation_level: l.generation_level ? Number(l.generation_level) : 2,
             buyer_name: buyer?.full_name || 'Member Sale',
             buyer_referral_code: buyer?.referral_code || null,
             original_referrer_name: orig?.full_name || 'Direct Sponsor',
@@ -381,6 +385,8 @@ async function startServer() {
             transaction_type,
             amount,
             payment_status,
+            slot_number,
+            generation_level,
             created_at,
             buyer:buyer_user_id ( full_name, email, referral_code ),
             beneficiary:beneficiary_user_id ( full_name, email, referral_code ),
@@ -414,7 +420,7 @@ async function startServer() {
             if (!isPassup) continue;
 
             const saleNum = t.sale_number || (t.transaction_type?.includes('1') ? 1 : t.transaction_type?.includes('3') ? 3 : 1);
-            const dedupKey = `${t.buyer_user_id}_${saleNum}`;
+            const dedupKey = `${t.buyer_user_id}_${saleNum}_${t.slot_number || 1}`;
             if (seenKeys.has(dedupKey)) continue;
             seenKeys.add(dedupKey);
 
@@ -422,6 +428,8 @@ async function startServer() {
               sale_number: saleNum,
               amount: Number(t.amount || 0),
               passup_reason: t.transaction_type || 'PASSUP_QUALIFICATION',
+              slot_number: t.slot_number ? Number(t.slot_number) : 1,
+              generation_level: t.generation_level ? Number(t.generation_level) : 2,
               buyer_name: t.buyer?.full_name || 'Member Sale',
               buyer_referral_code: t.buyer?.referral_code || null,
               original_referrer_name: t.sponsor?.full_name || 'Direct Sponsor',
@@ -509,16 +517,16 @@ async function startServer() {
           .order('joining_date', { ascending: true }),
         supabase
           .from('transactions')
-          .select('order_id, utr_number, zap_key_used, buyer_user_id, beneficiary_user_id, sponsor_id, sale_number, is_passup, transaction_type, amount, payment_status, created_at')
+          .select('order_id, utr_number, zap_key_used, buyer_user_id, beneficiary_user_id, sponsor_id, sale_number, is_passup, transaction_type, amount, payment_status, slot_number, generation_level, created_at')
           .eq('payment_status', 'SUCCESS')
           .or(`sponsor_id.eq.${nodeId},beneficiary_user_id.eq.${nodeId},buyer_user_id.in.(${directIds.join(',')}),sponsor_id.in.(${directIds.join(',')})`),
         supabase
           .from('passup_logs')
-          .select('original_referrer_id, passed_to_upline_id, sale_number, amount, passup_reason, created_at')
+          .select('original_referrer_id, passed_to_upline_id, sale_number, amount, passup_reason, slot_number, generation_level, created_at')
           .or(`original_referrer_id.eq.${nodeId},passed_to_upline_id.eq.${nodeId},original_referrer_id.in.(${directIds.join(',')})`),
         supabase
           .from('sale_ledger')
-          .select('sale_number, sponsor_id, buyer_user_id, beneficiary_user_id, is_passup, amount, created_at')
+          .select('sale_number, sponsor_id, buyer_user_id, beneficiary_user_id, is_passup, amount, slot_number, generation_level, created_at')
           .or(`sponsor_id.eq.${nodeId},beneficiary_user_id.eq.${nodeId},sponsor_id.in.(${directIds.join(',')})`)
       ]);
 
@@ -547,8 +555,10 @@ async function startServer() {
         const takenSlots = new Set<number>();
 
         for (const m of memberList) {
-          const mTx = allTx.find(t => t.buyer_user_id === m.id);
-          const mLedger = allLedger.find(l => l.buyer_user_id === m.id && l.sponsor_id === sponsorId);
+          const buyerTxs = allTx.filter(t => t.buyer_user_id === m.id);
+          const buyerLedger = allLedger.filter(l => l.buyer_user_id === m.id && l.sponsor_id === sponsorId);
+          const mTx = buyerTxs[0];
+          const mLedger = buyerLedger[0];
           const mPassup = allPassups.find(p => p.original_referrer_id === sponsorId && (p.sale_number === mTx?.sale_number || p.sale_number === mLedger?.sale_number));
 
           const rawNum = mLedger?.sale_number ?? mTx?.sale_number ?? mPassup?.sale_number;
@@ -563,11 +573,19 @@ async function startServer() {
               (mTx && mTx.beneficiary_user_id !== sponsorId) ??
               (num === 1 || num === 3)
             );
+
+            // Sum settled transaction/ledger amounts across all active slots for that buyer where the user is the beneficiary
+            const nodeBeneficiaryTxs = buyerTxs.filter(t => t.beneficiary_user_id === nodeId);
+            const nodeBeneficiaryLedger = allLedger.filter(l => l.buyer_user_id === m.id && l.beneficiary_user_id === nodeId);
+            const totalSettledAmt = nodeBeneficiaryTxs.reduce((sum, t) => sum + Number(t.amount || 0), 0) ||
+                                    nodeBeneficiaryLedger.reduce((sum, l) => sum + Number(l.amount || 0), 0) ||
+                                    Number(mLedger?.amount || mTx?.amount || 0);
+
             assignedByBuyer.set(m.id, {
               saleNumber: num,
               isPassup: isPass,
               utr: mTx?.utr_number || null,
-              amount: Number(mLedger?.amount || mTx?.amount || 0),
+              amount: totalSettledAmt,
               beneficiaryId: mLedger?.beneficiary_user_id || mTx?.beneficiary_user_id
             });
           }
@@ -610,7 +628,7 @@ async function startServer() {
               is_passup: isPassUp,
               isPassedUp: isPassUp,
               flowType: isPassUp ? 'PASS_UP' : 'DIRECT_KEEP',
-              moneyReceived: (!isPassUp && assigned.amount) ? assigned.amount : (!isPassUp ? 5000 : 0),
+              moneyReceived: (!isPassUp && assigned.amount) ? assigned.amount : 0,
               utr: assigned.utr,
               children: [] as any[]
             };
@@ -632,7 +650,7 @@ async function startServer() {
               isPassedUp: isPassUp,
               isChildPassupToYou: isChildPassupToNode,
               didChildPayMe: isChildPassupToNode,
-              childMoney: (isChildPassupToNode && assigned.amount) ? assigned.amount : (isChildPassupToNode ? 5000 : 0),
+              childMoney: (isChildPassupToNode && assigned.amount) ? assigned.amount : 0,
               utr: assigned.utr,
               children: [] as any[]
             };
@@ -667,7 +685,7 @@ async function startServer() {
   // Vite middleware in dev or Static in production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -679,9 +697,21 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`MoneyOcean Server running on http://localhost:${PORT}`);
   });
+
+  const handleShutdown = () => {
+    server.close(() => {
+      process.exit(0);
+    });
+    setTimeout(() => {
+      process.exit(0);
+    }, 1000).unref();
+  };
+
+  process.on('SIGTERM', handleShutdown);
+  process.on('SIGINT', handleShutdown);
 }
 
 startServer().catch((err) => {

@@ -20,28 +20,53 @@ import { useAuth } from '../context/AuthContext';
 import { 
   supabase, 
   generateP2PCheckout, 
-  checkZapUPIAutoStatus 
+  checkZapUPIAutoStatus,
+  getSlotPackages,
+  getUserActiveSlots,
+  maskZapKey,
+  DEFAULT_SLOT_PACKAGES
 } from '../lib/supabase';
 import { showToast } from '../components/Toast';
-import { CheckoutResponse } from '../types';
+import { CheckoutResponse, SlotPackage, UserSlot } from '../types';
 import { UltraPayLogo } from '../components/UltraPayLogo';
 import { PaymentChakraRedirect } from '../components/PaymentChakraRedirect';
 
 interface CheckoutPageProps {
   onNavigateDashboard: () => void;
+  selectedSlotNumber?: number;
 }
 
-export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard }) => {
+export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard, selectedSlotNumber }) => {
   const { user, authUser, refreshUserData, packagePrice, platformConfig } = useAuth();
   const lockMinutes = Number(platformConfig?.reservation_lock_minutes || 8);
   const [loading, setLoading] = useState(false);
   const [slotLockedError, setSlotLockedError] = useState<string | null>(null);
+  const [allSlotsActive, setAllSlotsActive] = useState<boolean>(false);
+  const [alreadyActiveMessage, setAlreadyActiveMessage] = useState<string | null>(null);
+  const [sequentialNotice, setSequentialNotice] = useState<string | null>(null);
 
+  // Slot Detection from Prop or URL Query Parameter (?slot=X)
+  const [currentSlotNum, setCurrentSlotNum] = useState<number>(() => {
+    if (selectedSlotNumber) return Number(selectedSlotNumber);
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const s = sp.get('slot');
+      if (s) {
+        const parsed = parseInt(s, 10);
+        if (!isNaN(parsed) && parsed >= 1 && parsed <= 8) return parsed;
+      }
+    }
+    return 1;
+  });
+
+  const [currentSlotName, setCurrentSlotName] = useState<string>('Starter Ocean');
   const [orderId, setOrderId] = useState<string>('');
   const [payId, setPayId] = useState<string>('');
   const [amount, setAmount] = useState<number>(packagePrice || 500);
   const [dynamicZapKey, setDynamicZapKey] = useState<string>(platformConfig?.fallback_zap_key || '');
   const [paymentUrl, setPaymentUrl] = useState<string>('');
+  const [receiverGatewayLabel, setReceiverGatewayLabel] = useState<string>('Verified UPI Gateway');
+  const [receiverZapKeyMasked, setReceiverZapKeyMasked] = useState<string>('');
 
   const [routingInfo, setRoutingInfo] = useState<{
     beneficiary_name?: string;
@@ -94,6 +119,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     isInitializingRef.current = true;
     setLoading(true);
     setSlotLockedError(null);
+    setSequentialNotice(null);
     finalHandledRef.current = false;
     pollActiveRef.current = true;
     setRemainingSeconds(lockMinutes * 60);
@@ -122,7 +148,76 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
         sponsorCode = user?.referral_code || 'UP_GENESIS';
       }
 
-      const res: CheckoutResponse = await generateP2PCheckout(sponsorCode, authUser.id);
+      // Determine target slot number with strict sequential progression (1 -> 2 -> ... -> 8)
+      let targetSlot = currentSlotNum;
+      try {
+        const [allSlots, userSlots] = await Promise.all([
+          getSlotPackages(),
+          getUserActiveSlots(authUser.id)
+        ]);
+
+        const activeSlotNums = new Set(userSlots.filter(s => s.is_active).map((s) => Number(s.slot_number)));
+        if (user?.is_active) {
+          activeSlotNums.add(1);
+        }
+
+        // Verify if all 8 slots are already active
+        const allEightSlots = [1, 2, 3, 4, 5, 6, 7, 8];
+        const allEightActive = allEightSlots.every((slotNum) => activeSlotNums.has(slotNum));
+        if (allEightActive) {
+          setAllSlotsActive(true);
+          setLoading(false);
+          isInitializingRef.current = false;
+          return null;
+        }
+
+        // Identify lowest unactivated slot in sequence 1 through 8
+        const lowestUnactivatedSlot = allEightSlots.find((slotNum) => !activeSlotNums.has(slotNum)) || 1;
+
+        // Check chosen slot from prop or URL
+        let chosenSlot = selectedSlotNumber ? Number(selectedSlotNumber) : undefined;
+        if (!chosenSlot && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('slot')) {
+          const s = parseInt(new URLSearchParams(window.location.search).get('slot') || '1', 10);
+          if (!isNaN(s) && s >= 1 && s <= 8) chosenSlot = s;
+        }
+
+        if (!chosenSlot) {
+          chosenSlot = currentSlotNum;
+        }
+
+        // Strict sequential prerequisite check:
+        // If targetSlot > 1 and !activeSlotNums.has(targetSlot - 1), block slot allocation and automatically
+        // redirect or set targetSlot to user's lowest unactivated slot in order (1 -> 8)
+        if (chosenSlot > 1 && !activeSlotNums.has(chosenSlot - 1)) {
+          const warningMsg = `Please activate Slot ${chosenSlot - 1} first before upgrading to Slot ${chosenSlot}!`;
+          setSequentialNotice(warningMsg);
+          showToast('info', 'Sequential Unlock Required', warningMsg);
+          targetSlot = lowestUnactivatedSlot;
+        } else if (activeSlotNums.has(chosenSlot)) {
+          // If the chosen slot is already active, redirect to the user's lowest unactivated slot
+          targetSlot = lowestUnactivatedSlot;
+        } else {
+          targetSlot = chosenSlot;
+        }
+
+        const foundPkg = (allSlots && allSlots.length > 0 ? allSlots : DEFAULT_SLOT_PACKAGES).find((p) => p.slot_number === targetSlot) || DEFAULT_SLOT_PACKAGES.find((p) => p.slot_number === targetSlot);
+        if (foundPkg) {
+          setCurrentSlotNum(foundPkg.slot_number);
+          setCurrentSlotName(foundPkg.slot_name);
+          setAmount(foundPkg.price);
+        }
+
+        // Sync browser URL search param with the resolved sequential slot
+        if (typeof window !== 'undefined' && window.history?.replaceState) {
+          const url = new URL(window.location.href);
+          url.searchParams.set('slot', String(targetSlot));
+          window.history.replaceState({}, '', url.toString());
+        }
+      } catch (slotLookupErr) {
+        console.warn('Slot lookup notice:', slotLookupErr);
+      }
+
+      const res: CheckoutResponse = await generateP2PCheckout(sponsorCode, authUser.id, targetSlot);
       if (res.error_code === 'SLOT_IN_PROGRESS') {
         const errMsg = res.message || `Payment slot is currently locked by another buyer. Please retry in ${lockMinutes} minutes.`;
         setSlotLockedError(errMsg);
@@ -130,12 +225,25 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
         return null;
       }
 
+      if (!res.success && res.message?.includes('already active')) {
+        setAlreadyActiveMessage(res.message);
+        setLoading(false);
+        isInitializingRef.current = false;
+        return null;
+      }
+
       if (res.success && res.order_id) {
         setOrderId(res.order_id);
-        const orderAmt = Number(res.payment?.amount_inr !== undefined ? res.payment.amount_inr : (res.amount !== undefined ? res.amount : packagePrice));
+        const orderAmt = Number(res.amount !== undefined ? res.amount : (res.payment?.amount_inr !== undefined ? res.payment.amount_inr : packagePrice));
         setAmount(orderAmt);
+        if (res.slot_number) setCurrentSlotNum(res.slot_number);
+        if (res.slot_name) setCurrentSlotName(res.slot_name);
         const activeZap = res.zap_key || res.payment?.zap_key || res.beneficiary_zap_key || platformConfig?.fallback_zap_key || '';
         setDynamicZapKey(activeZap);
+
+        // Receiving Gateway label and masked ZapKey
+        setReceiverGatewayLabel(res.merchant_name || 'Verified UPI Gateway');
+        setReceiverZapKeyMasked(res.zap_key_masked || maskZapKey(activeZap));
 
         const rName = res.routing_info?.beneficiary_name || res.beneficiary_name || 'Admin Beneficiary';
         const rPassup = Boolean(res.is_passup ?? res.routing_info?.is_passup);
@@ -241,7 +349,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
     const targetUrl = payUrl || paymentUrl;
     const activeKey = (zKey || dynamicZapKey || platformConfig?.fallback_zap_key || '').trim();
     const targetOrderId = (oId || orderId).trim();
-    const targetAmount = amt !== undefined ? amt : (amount || Number(packagePrice || platformConfig?.package_price || 500));
+    const targetAmount = amt !== undefined ? amt : (amount || Number(packagePrice || platformConfig?.package_price || 1000));
 
     setStatusText('Connecting to Secure Bank Settlement Channel...');
     setShowChakraRedirect(true);
@@ -437,7 +545,31 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-amber-500/10 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-[140px] pointer-events-none" />
 
-      {slotLockedError ? (
+      {allSlotsActive || alreadyActiveMessage ? (
+        <div className="w-full max-w-md bg-[#0c1424] border border-emerald-500/50 rounded-3xl p-6 sm:p-8 text-center space-y-5 shadow-2xl relative z-10 animate-in fade-in">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400 shadow-[0_0_25px_rgba(16,185,129,0.25)]">
+            <CheckCircle2 className="w-9 h-9" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl sm:text-2xl font-extrabold font-display text-white">
+              {alreadyActiveMessage ? 'Slot Already Active' : 'All 8 Ocean Slots Active! 🎉'}
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed font-sans">
+              {alreadyActiveMessage 
+                ? `${alreadyActiveMessage} You are actively receiving 100% P2P direct UPI payouts.`
+                : 'Your MoneyOcean account has all 8 Ocean Matrix slots active! You are receiving 100% direct peer payouts and 2-Up pass-up bonuses across all tiers.'}
+            </p>
+          </div>
+          <div className="pt-2">
+            <button
+              onClick={onNavigateDashboard}
+              className="w-full py-3.5 rounded-xl gold-btn-gradient text-slate-950 font-bold text-sm cursor-pointer shadow-lg shadow-amber-500/20 font-display hover:scale-[1.01] transition-transform"
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      ) : slotLockedError ? (
         <div className="w-full max-w-md bg-[#0c111c] border border-rose-500/40 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-2xl relative z-10">
           <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center mx-auto text-rose-400">
             <Clock className="w-7 h-7" />
@@ -496,19 +628,29 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
             </div>
           </div>
 
+          {/* Sequential Notice Banner if redirected */}
+          {sequentialNotice && (
+            <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-medium flex items-center gap-2.5 animate-in fade-in">
+              <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="leading-snug">{sequentialNotice}</span>
+            </div>
+          )}
+
           {/* Brand & Price Header */}
           <div className="text-center space-y-3 pt-1">
             <div className="flex justify-center mb-1">
               <UltraPayLogo size="md" variant="vertical" subtitle="Har Second Settlement, Seedha Bank Account Mein." />
             </div>
 
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 text-[11px] font-mono font-semibold">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Instant Bank Transfer</span>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 text-xs font-mono font-bold shadow-md shadow-emerald-500/10">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Slot {currentSlotNum} — {currentSlotName}</span>
+              </div>
             </div>
 
             <div className="text-3xl sm:text-4xl font-extrabold font-display gold-gradient-text tracking-tight tabular-nums">
-              ₹{Number(amount || packagePrice || 500).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{Number(amount || packagePrice || 1000).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
 
             <div className="text-xs text-slate-400 font-mono flex items-center justify-center gap-1.5">
@@ -525,20 +667,34 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
             </div>
           </div>
 
-          {/* Beneficiary Node Details */}
-          <div className="p-3.5 rounded-2xl bg-[#070b14] border border-[#1b2538] flex items-center justify-between text-xs font-mono">
-            <div>
-              <div className="text-[10px] text-slate-500">Beneficiary Recipient</div>
-              <div className="font-bold text-white text-sm truncate">{routingInfo.beneficiary_name || 'Admin Beneficiary'}</div>
+          {/* Beneficiary Node & Receiving Gateway Details */}
+          <div className="p-3.5 rounded-2xl bg-[#070b14] border border-[#1b2538] space-y-2 text-xs font-mono">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[10px] text-slate-500">Beneficiary Recipient</div>
+                <div className="font-bold text-white text-sm truncate">{routingInfo.beneficiary_name || 'Admin Beneficiary'}</div>
+              </div>
+              <div className="text-right">
+                <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold ${
+                  isPassup 
+                    ? 'bg-amber-950 text-amber-300 border border-amber-500/30' 
+                    : 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
+                }`}>
+                  {isPassup ? '2-Up Pass-Up' : '100% Direct'}
+                </span>
+              </div>
             </div>
-            <div className="text-right">
-              <span className={`text-[10px] px-2.5 py-1 rounded-md font-bold ${
-                isPassup 
-                  ? 'bg-amber-950 text-amber-300 border border-amber-500/30' 
-                  : 'bg-emerald-950 text-emerald-300 border border-emerald-500/30'
-              }`}>
-                {isPassup ? '2-Up Pass-Up' : '100% Direct'}
-              </span>
+
+            {/* Receiving Gateway / ZapKey Indicator */}
+            <div className="pt-2 border-t border-[#1b2538]/70 flex items-center justify-between text-[11px]">
+              <div className="flex items-center gap-1.5 text-slate-400">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="truncate max-w-[170px]">{receiverGatewayLabel || 'Verified UPI Gateway'}</span>
+              </div>
+              <div className="flex items-center gap-1 text-emerald-400 font-mono font-semibold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
+                <Zap className="w-3 h-3 text-emerald-400 fill-emerald-400" />
+                <span>{receiverZapKeyMasked || maskZapKey(dynamicZapKey)}</span>
+              </div>
             </div>
           </div>
 
@@ -582,7 +738,9 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
               ) : (
                 <Zap className="w-5 h-5 fill-slate-950" />
               )}
-              <span>Proceed to Instant UPI Payment</span>
+              <span>
+                Proceed to Instant UPI Payment (₹{Number(amount || packagePrice || 1000).toLocaleString('en-IN')}) • Slot #{currentSlotNum}
+              </span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
@@ -605,7 +763,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
       {/* Sacred Rotating Chakra & UltraPay Redirect Overlay */}
       {showChakraRedirect && (
         <PaymentChakraRedirect
-          amount={amount || packagePrice || 500}
+          amount={amount || packagePrice || 1000}
           orderId={orderId}
           beneficiaryName={routingInfo.beneficiary_name}
           targetPaymentUrl={paymentUrl}
@@ -619,7 +777,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onNavigateDashboard 
                   {
                     zap_key: dynamicZapKey,
                     order_id: orderId,
-                    amount: Number(amount || packagePrice || 500).toFixed(2),
+                    amount: Number(amount || packagePrice || 1000).toFixed(2),
                     customer_mobile: user?.mobile || '',
                     remark: `MoneyOcean|${user?.referral_code || 'P2P'}`
                   },
